@@ -1,38 +1,19 @@
 <script setup lang="ts">
-interface Wall {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
-interface Point {
-  x: number
-  y: number
-}
-interface Features {
-  area: number
-  perimeter: number
-  occlusivity: number
-  m1: number
-  m2: number
-}
-interface Fingerprint {
-  pos: Point
-  features: Features
-}
+import type { Features, Obstacle } from '~/robot'
+import { Robot } from '~/robot'
 
 const canvasEl = useTemplateRef('canvas')
 const logs = ref<string[]>([])
 
-function genCircularWall(
+function createCircleObstacle(
   cx: number,
   cy: number,
   radius: number,
   startAngle: number,
   endAngle: number,
-): Wall[] {
+): Obstacle[] {
   const segments = 96
-  const result: Wall[] = []
+  const result: Obstacle[] = []
   const step = (endAngle - startAngle) / segments
   for (let i = 0; i < segments; i++) {
     const a1 = startAngle + i * step
@@ -47,7 +28,7 @@ function genCircularWall(
   return result
 }
 
-const walls: Wall[] = [
+const obstacles: Obstacle[] = [
   // outline
   { x1: 0, y1: 0, x2: 600, y2: 0 },
   { x1: 600, y1: 0, x2: 600, y2: 600 },
@@ -71,93 +52,21 @@ const walls: Wall[] = [
   { x1: 350, y1: 450, x2: 600, y2: 450 },
 
   // bottom left
-  ...genCircularWall(165, 450, 80, 0, Math.PI * 2),
-
+  ...createCircleObstacle(165, 450, 80, 0, Math.PI * 2),
 ]
 
-const robot = { x: 75, y: 75, angle: 0, radius: 10 }
-const rayCount = 360
-const rayLength = 100
-const speed = 3
-const turnSpeed = 0.1
-
-const fingerprints: Fingerprint[] = []
-
-function getIntersection(rx: number, ry: number, dx: number, dy: number, wall: Wall) {
-  const { x1, y1, x2, y2 } = wall
-  const vx = x2 - x1; const vy = y2 - y1
-  const det = dx * vy - dy * vx
-  if (Math.abs(det) < 1e-6)
-    return
-
-  const t = ((x1 - rx) * vy - (y1 - ry) * vx) / det
-  const u = ((x1 - rx) * dy - (y1 - ry) * dx) / det
-  if (t > 0 && u >= 0 && u <= 1) {
-    return { x: rx + t * dx, y: ry + t * dy } as Point
-  }
-}
-
-function castRays(): Point[] {
-  const points: Point[] = []
-  for (let i = 0; i < rayCount; i++) {
-    const theta = robot.angle + (i * 2 * Math.PI) / rayCount
-    const dx = Math.cos(theta)
-    const dy = Math.sin(theta)
-    let closest: Point
-    let minD = Infinity
-
-    for (const w of walls) {
-      const pt = getIntersection(robot.x, robot.y, dx, dy, w)
-      if (pt) {
-        const d = Math.hypot(pt.x - robot.x, pt.y - robot.y)
-        if (d < minD) {
-          minD = d
-          closest = pt
-        }
-      }
-    }
-    closest ??= { x: robot.x + dx * rayLength, y: robot.y + dy * rayLength }
-    points.push(closest)
-  }
-  return points
-}
-
-function computeArea(points: Point[]): number {
-  let area = 0
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i]
-    const b = points[(i + 1) % points.length]
-    area += a.x * b.y - b.x * a.y
-  }
-  return Math.abs(area) / 2
-}
-
-function computePerimeter(points: Point[]): number {
-  return points.reduce((sum, p, i) => {
-    const q = points[(i + 1) % points.length]
-    return sum + Math.hypot(q.x - p.x, q.y - p.y)
-  }, 0)
-}
-
-function computeFeatures(points: Point[]): Features {
-  const area = computeArea(points)
-  const perimeter = computePerimeter(points)
-  const ds = points.map(p => Math.hypot(p.x - robot.x, p.y - robot.y))
-  const meanD = ds.reduce((s, v) => s + v, 0) / ds.length
-  const maxD = Math.max(...ds)
-  const occlusivity = 1 - (perimeter / (2 * Math.PI * maxD))
-  const m1 = meanD
-  const m2 = ds.reduce((s, d) => s + d * d, 0) / ds.length
-  return { area, perimeter, occlusivity, m1, m2 }
-}
+const robot = new Robot(75, 75)
 
 function euclidean(a: Features, b: Features): number {
-  return Math.sqrt(Object.keys(a)
-    .reduce((sum, k) => sum + (a[k as keyof Features] - b[k as keyof Features]) ** 2, 0))
+  const keys = Object.keys(a) as (keyof Features)[]
+  const sum = keys.reduce((sum, k) => sum + (a[k] - b[k]) ** 2, 0)
+  return Math.sqrt(sum)
 }
 
-function distPointToSeg(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
-  const dx = x2 - x1; const dy = y2 - y1
+function distPointToSeg(px: number, py: number, obstacle: Obstacle) {
+  const { x1, x2, y1, y2 } = obstacle
+  const dx = x2 - x1
+  const dy = y2 - y1
   const l2 = dx * dx + dy * dy
   if (l2 === 0)
     return Math.hypot(px - x1, py - y1)
@@ -168,8 +77,8 @@ function distPointToSeg(px: number, py: number, x1: number, y1: number, x2: numb
   return Math.hypot(px - projX, py - projY)
 }
 
-function collides(x: number, y: number): boolean {
-  return walls.some(w => distPointToSeg(x, y, w.x1, w.y1, w.x2, w.y2) < robot.radius)
+function collides(x: number, y: number) {
+  return obstacles.some(w => distPointToSeg(x, y, w) < robot.radius)
 }
 
 function draw() {
@@ -181,18 +90,18 @@ function draw() {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  // Draw walls
+  // Draw obstacles
   ctx.strokeStyle = '#fff'
   ctx.lineWidth = 2
-  walls.forEach((w) => {
+  obstacles.forEach((o) => {
     ctx.beginPath()
-    ctx.moveTo(w.x1, w.y1)
-    ctx.lineTo(w.x2, w.y2)
+    ctx.moveTo(o.x1, o.y1)
+    ctx.lineTo(o.x2, o.y2)
     ctx.stroke()
   })
 
   // Draw LIDAR rays
-  const points = castRays()
+  const points = robot.castRays(obstacles)
   ctx.strokeStyle = 'rgba(0,255,0,0.3)'
   points.forEach((p) => {
     ctx.beginPath()
@@ -217,7 +126,7 @@ function draw() {
   ctx.stroke()
 }
 
-function animate(): void {
+function animate() {
   draw()
   requestAnimationFrame(animate)
 }
@@ -230,27 +139,42 @@ function print(msg: string) {
 window.addEventListener('keydown', (e: KeyboardEvent) => {
   let newX = robot.x
   let newY = robot.y
-  if (e.key === 'w') { newX += Math.cos(robot.angle) * speed; newY += Math.sin(robot.angle) * speed }
-  if (e.key === 's') { newX -= Math.cos(robot.angle) * speed; newY -= Math.sin(robot.angle) * speed }
+
+  if (e.key === 'w') {
+    newX += Math.cos(robot.angle) * robot.speed
+    newY += Math.sin(robot.angle) * robot.speed
+  }
+  if (e.key === 's') {
+    newX -= Math.cos(robot.angle) * robot.speed
+    newY -= Math.sin(robot.angle) * robot.speed
+  }
   if ((e.key === 'w' || e.key === 's') && !collides(newX, newY)) {
     robot.x = newX
     robot.y = newY
   }
+
   if (e.key === 'a')
-    robot.angle -= turnSpeed
+    robot.angle -= robot.turn
   if (e.key === 'd')
-    robot.angle += turnSpeed
+    robot.angle += robot.turn
 
   if (e.key === 'k') {
-    const feat = computeFeatures(castRays())
-    fingerprints.push({ pos: { x: robot.x, y: robot.y }, features: feat })
-    print(`Stored fingerprint #${fingerprints.length}`)
+    const feat = robot.computeFeatures(obstacles)
+    robot.fingerprints.push({
+      position: { x: robot.x, y: robot.y },
+      features: feat,
+    })
+    print(`Stored fingerprint #${robot.fingerprints.length}`)
   }
+
   if (e.key === 'm') {
-    if (fingerprints.length === 0) { print('No fingerprints stored'); return }
-    const curr = computeFeatures(castRays())
+    if (robot.fingerprints.length === 0) {
+      print('No fingerprints stored')
+      return
+    }
+    const curr = robot.computeFeatures(obstacles)
     let bestE = { i: -1, d: Infinity }
-    fingerprints.forEach((fp, idx) => {
+    robot.fingerprints.forEach((fp, idx) => {
       const d = euclidean(curr, fp.features)
       if (d < bestE.d)
         bestE = { i: idx, d }
