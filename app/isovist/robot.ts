@@ -1,32 +1,10 @@
-export interface Point {
-  x: number
-  y: number
-}
-
-export interface Features {
-  area: number
-  perimeter: number
-  occlusivity: number
-  m1: number
-  m2: number
-}
-
-export interface Fingerprint {
-  position: Point
-  features: Features
-}
-
-export interface Obstacle {
-  x1: number
-  y1: number
-  x2: number
-  y2: number
-}
+import type { Fingerprint, Obstacle, Point } from './types'
 
 export class Robot {
   constructor(
     public x = 0,
     public y = 0,
+    public obstacles = [] as Obstacle[],
     public angle = 0,
     public radius = 10,
     public speed = 3,
@@ -36,7 +14,7 @@ export class Robot {
     public fingerprints = [] as Fingerprint[],
   ) {}
 
-  castRays(obstacles: Obstacle[]) {
+  castRays() {
     const points: Point[] = []
     for (let i = 0; i < this.rayCount; i++) {
       const theta = this.angle + (i * 2 * Math.PI) / this.rayCount
@@ -45,7 +23,7 @@ export class Robot {
       let closest: Point
       let minD = Number.POSITIVE_INFINITY
 
-      for (const o of obstacles) {
+      for (const o of this.obstacles) {
         const point = this.#getIntersection(this.x, this.y, dx, dy, o)
         if (!point)
           continue
@@ -96,8 +74,8 @@ export class Robot {
     }, 0)
   }
 
-  computeFeatures(obstacles: Obstacle[]) {
-    const points = this.castRays(obstacles)
+  computeFeatures() {
+    const points = this.castRays()
     const area = this.#computeArea(points)
     const perimeter = this.#computePerimeter(points)
     const ds = points.map(p => Math.hypot(p.x - this.x, p.y - this.y))
