@@ -7,11 +7,11 @@ export class Robot {
     public obstacles = [] as Obstacle[],
     public speed = 1,
     public rayCount = 360,
-    public rayLength = 10,
+    public rayLength = 600,
     public fingerprints = [] as Fingerprint[],
   ) {}
 
-  castRays() {
+  cast() {
     const points: Point[] = []
     for (let i = 0; i < this.rayCount; i++) {
       const theta = (i / this.rayCount) * 2 * Math.PI
