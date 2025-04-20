@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { obstacles } from '~/isovist/obstacle'
+import { map } from '~/isovist/obstacle'
 import { Robot } from '~/isovist/robot'
 
 const width = 600
 const height = 600
 const cell = 30
+const colisionRange = 5
 
 const canvasEl = useTemplateRef('canvas')
-const robot = new Robot({ x: 100, y: 100, obstacles })
-
-// const grids: [number, number][] = []
+const robot = new Robot({
+  x: 100,
+  y: 100,
+  obstacles: map.obstacles,
+})
 
 function draw() {
   const canvas = canvasEl.value
@@ -23,21 +26,17 @@ function draw() {
 
   // Draw dots
   ctx.fillStyle = '#555'
-  const range = 5
-  const cx = 300
-  const cy = 300
-  const radius = 300
 
   for (let x = 0; x <= width; x += cell) {
     for (let y = 0; y <= height; y += cell) {
-      const dx = x - cx
-      const dy = y - cy
+      const dx = x - map.config.cx
+      const dy = y - map.config.cy
       const distSq = dx * dx + dy * dy
-      if (distSq > radius * radius)
+      if (distSq > map.config.radius * map.config.radius)
         continue
       const hidden = robot.lines.some((l) => {
         const d = pointToSegmentDist(x, y, l.x1, l.y1, l.x2, l.y2)
-        return d <= range
+        return d <= colisionRange
       })
       if (hidden)
         continue
