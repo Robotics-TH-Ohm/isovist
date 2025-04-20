@@ -1,31 +1,51 @@
-import type { Fingerprint, Obstacle, Point } from './types'
+import type { Fingerprint, Line, Obstacle, Point } from './types'
+
+interface Config {
+  x?: number
+  y?: number
+  obstacles?: Obstacle[]
+}
+
+const RAY_COUNT = 360
+const RAY_LENGTH = 600
+const SPEED = 1
 
 export class Robot {
-  constructor(
-    public x = 0,
-    public y = 0,
-    public obstacles = [] as Obstacle[],
-    public speed = 1,
-    public rayCount = 360,
-    public rayLength = 600,
-    public fingerprints = [] as Fingerprint[],
-  ) {}
+  x: number
+  y: number
+  obstacles: Obstacle[]
+  lines: Line[]
+  fingerprints: Fingerprint[]
+
+  constructor(c: Config = {}) {
+    const {
+      x = 0,
+      y = 0,
+      obstacles = [],
+    } = c
+
+    this.x = x
+    this.y = y
+    this.obstacles = obstacles
+    this.lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
+    this.fingerprints = []
+  }
 
   cast() {
     const points: Point[] = []
-    for (let i = 0; i < this.rayCount; i++) {
-      const theta = (i / this.rayCount) * 2 * Math.PI
+    for (let i = 0; i < RAY_COUNT; i++) {
+      const theta = (i / RAY_COUNT) * 2 * Math.PI
       const dx = Math.cos(theta)
       const dy = Math.sin(theta)
 
       let closestPoint = {
-        x: this.x + dx * this.rayLength,
-        y: this.y + dy * this.rayLength,
+        x: this.x + dx * RAY_LENGTH,
+        y: this.y + dy * RAY_LENGTH,
       }
       let minD = Number.POSITIVE_INFINITY
 
-      for (const o of this.obstacles) {
-        const point = this.#getIntersection(this.x, this.y, dx, dy, o)
+      for (const l of this.lines) {
+        const point = this.#getIntersection(this.x, this.y, dx, dy, l)
         if (!point)
           continue
 
@@ -42,8 +62,8 @@ export class Robot {
     return points
   }
 
-  #getIntersection(rx: number, ry: number, dx: number, dy: number, obstacle: Obstacle) {
-    const { x1, y1, x2, y2 } = obstacle
+  #getIntersection(rx: number, ry: number, dx: number, dy: number, line: Line) {
+    const { x1, y1, x2, y2 } = line
     const vx = x2 - x1
     const vy = y2 - y1
     const det = dx * vy - dy * vx
@@ -61,18 +81,18 @@ export class Robot {
   }
 
   up() {
-    this.y += this.speed
+    this.y += SPEED
   }
 
   down() {
-    this.y -= this.speed
+    this.y -= SPEED
   }
 
   left() {
-    this.x += this.speed
+    this.x += SPEED
   }
 
   right() {
-    this.x -= this.speed
+    this.x -= SPEED
   }
 }

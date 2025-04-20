@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { map2 } from '~/isovist/obstacle'
+import { obstacles } from '~/isovist/obstacle'
 import { Robot } from '~/isovist/robot'
 
 const width = 600
@@ -7,11 +7,8 @@ const height = 600
 const cell = 30
 
 const canvasEl = useTemplateRef('canvas')
-const logs = ref<string[]>([])
+const robot = new Robot({ x: 100, y: 100, obstacles })
 
-const obstacles = map2
-
-const robot = new Robot(100, 100, obstacles)
 // const grids: [number, number][] = []
 
 function draw() {
@@ -29,7 +26,7 @@ function draw() {
   const range = 5
   const cx = 300
   const cy = 300
-  const radius = 297
+  const radius = 300
 
   for (let x = 0; x <= width; x += cell) {
     for (let y = 0; y <= height; y += cell) {
@@ -38,26 +35,49 @@ function draw() {
       const distSq = dx * dx + dy * dy
       if (distSq > radius * radius)
         continue
-      const hidden = obstacles.some((o) => {
-        const d = pointToSegmentDist(x, y, o.x1, o.y1, o.x2, o.y2)
+      const hidden = robot.lines.some((l) => {
+        const d = pointToSegmentDist(x, y, l.x1, l.y1, l.x2, l.y2)
         return d <= range
       })
       if (hidden)
         continue
       ctx.beginPath()
-      ctx.arc(x, y, 5, 0, 2 * Math.PI)
+      ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
     }
   }
 
   // Draw obstacles
   ctx.strokeStyle = '#fff'
-  ctx.lineWidth = 5
-  obstacles.forEach((o) => {
-    ctx.beginPath()
-    ctx.moveTo(o.x1, o.y1)
-    ctx.lineTo(o.x2, o.y2)
-    ctx.stroke()
+  ctx.lineWidth = 3
+  robot.obstacles.forEach((o) => {
+    if (o.type === 'line') {
+      ctx.beginPath()
+      ctx.moveTo(o.line.x1, o.line.y1)
+      ctx.lineTo(o.line.x2, o.line.y2)
+      ctx.stroke()
+      return
+    }
+
+    if (o.fill) {
+      ctx.beginPath()
+      ctx.moveTo(o.lines[0].x1, o.lines[0].y1)
+      o.lines.forEach((l) => {
+        ctx.lineTo(l.x2, l.y2)
+      })
+      ctx.closePath()
+      ctx.fillStyle = '#fff'
+      ctx.fill()
+      ctx.stroke()
+      return
+    }
+
+    o.lines.forEach((l) => {
+      ctx.beginPath()
+      ctx.moveTo(l.x1, l.y1)
+      ctx.lineTo(l.x2, l.y2)
+      ctx.stroke()
+    })
   })
 
   // Draw rays
@@ -123,24 +143,8 @@ onMounted(animate)
 
 <template>
   <div class="p-6 container mx-auto @container">
-    <div class="grid grid-cols-1 @min-[800px]:grid-cols-2 gap-10">
-      <div class="flex items-center justify-center">
-        <canvas ref="canvas" :width="width" :height="height" />
-      </div>
-      <div class="hidden font-mono border py-2 px-4">
-        <p class="opacity-50">
-          W/A/S/D: Move/turn robot
-        </p>
-        <p class="opacity-50">
-          K: Store fingerprint  |  M: Match fingerprint
-        </p>
-        <p
-          v-for="(l, i) in logs"
-          :key="i"
-        >
-          {{ l }}
-        </p>
-      </div>
+    <div class="flex items-center justify-center">
+      <canvas ref="canvas" :width="width" :height="height" />
     </div>
   </div>
 </template>

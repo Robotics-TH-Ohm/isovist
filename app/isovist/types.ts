@@ -16,9 +16,19 @@ export interface Fingerprint {
   features: Features
 }
 
-export interface Obstacle {
+export interface Line {
   x1: number
   y1: number
   x2: number
   y2: number
 }
+export type Obstacle =
+  {
+    type: 'circle' | 'polygon'
+    lines: Line[]
+    fill?: boolean
+  }
+  | {
+    type: 'line'
+    line: Line
+  }
