@@ -1,18 +1,65 @@
 <script setup lang="ts">
+import type { Point } from '~/isovist/types'
 import { map } from '~/isovist/obstacle'
 import { Robot } from '~/isovist/robot'
+import { cast, computeFeatures, distPointToLine, euclidean } from '~/isovist/utils'
 
-const width = 600
-const height = 600
-const cell = 30
-const colisionRange = 5
+const config = map.config
+const obstacles = map.obstacles
+const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
+const area = config.radius ** 2
+const gridThreshold = 5
+
+const grids = (() => {
+  const arr: [number, number][] = []
+  for (let x = 0; x <= config.width; x += config.gridCell) {
+    for (let y = 0; y <= config.height; y += config.gridCell) {
+      const dx = x - config.cx
+      const dy = y - config.cy
+      const distSq = dx * dx + dy * dy
+      if (distSq > area)
+        continue
+
+      const point = { x, y }
+      const isNear = lines.some(line => distPointToLine(point, line) <= gridThreshold)
+      if (isNear)
+        continue
+
+      arr.push([x, y])
+    }
+  }
+  return arr
+})()
+
+const featuresDb = (() => grids.map(([x, y]) => {
+  const point = { x, y }
+  const points = cast(point, lines)
+  const features = computeFeatures(point, points)
+  return { point, features }
+}))()
+
+const robot = new Robot({ x: 100, y: 100 })
+let found: Point | undefined
+
+function find() {
+  const point = { x: robot.x, y: robot.y }
+  const points = cast(point, lines)
+  const features = computeFeatures(point, points)
+  let min = Number.POSITIVE_INFINITY
+  let found: Point | undefined
+
+  for (const f of featuresDb) {
+    const d = euclidean(features, f.features)
+    if (d < min) {
+      min = d
+      found = f.point
+    }
+  }
+
+  return found
+}
 
 const canvasEl = useTemplateRef('canvas')
-const robot = new Robot({
-  x: 100,
-  y: 100,
-  obstacles: map.obstacles,
-})
 
 function draw() {
   const canvas = canvasEl.value
@@ -22,24 +69,20 @@ function draw() {
 
   // Draw background
   ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, width, height)
+  ctx.fillRect(0, 0, config.width, config.height)
 
   // Draw dots
-  ctx.fillStyle = '#555'
+  for (const g of grids) {
+    const [x, y] = g
 
-  for (let x = 0; x <= width; x += cell) {
-    for (let y = 0; y <= height; y += cell) {
-      const dx = x - map.config.cx
-      const dy = y - map.config.cy
-      const distSq = dx * dx + dy * dy
-      if (distSq > map.config.radius * map.config.radius)
-        continue
-      const hidden = robot.lines.some((l) => {
-        const d = pointToSegmentDist(x, y, l.x1, l.y1, l.x2, l.y2)
-        return d <= colisionRange
-      })
-      if (hidden)
-        continue
+    if (found && found.x === x && found.y === y) {
+      ctx.fillStyle = '#0ff'
+      ctx.beginPath()
+      ctx.arc(x, y, 6, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+    else {
+      ctx.fillStyle = '#555'
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
@@ -49,7 +92,7 @@ function draw() {
   // Draw obstacles
   ctx.strokeStyle = '#fff'
   ctx.lineWidth = 3
-  robot.obstacles.forEach((o) => {
+  obstacles.forEach((o) => {
     if (o.type === 'line') {
       ctx.beginPath()
       ctx.moveTo(o.line.x1, o.line.y1)
@@ -80,35 +123,21 @@ function draw() {
   })
 
   // Draw rays
-  const points = robot.cast()
-  ctx.lineWidth = 1
-  ctx.strokeStyle = 'rgba(0,255,0,0.5)'
-  points.forEach((p) => {
-    ctx.beginPath()
-    ctx.moveTo(robot.x, robot.y)
-    ctx.lineTo(p.x, p.y)
-    ctx.stroke()
-  })
+  // const points = cast({ x: robot.x, y: robot.y }, lines)
+  // ctx.lineWidth = 1
+  // ctx.strokeStyle = 'rgba(0,255,0,0.5)'
+  // points.forEach((p) => {
+  //   ctx.beginPath()
+  //   ctx.moveTo(robot.x, robot.y)
+  //   ctx.lineTo(p.x, p.y)
+  //   ctx.stroke()
+  // })
 
   // Draw robot
   ctx.fillStyle = '#f00'
   ctx.beginPath()
   ctx.arc(robot.x, robot.y, 10, 0, 2 * Math.PI)
   ctx.fill()
-}
-
-function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const lengthSq = dx * dx + dy * dy
-
-  if (lengthSq === 0)
-    return Math.hypot(px - x1, py - y1)
-
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq))
-  const projX = x1 + t * dx
-  const projY = y1 + t * dy
-  return Math.hypot(px - projX, py - projY)
 }
 
 const keys = new Set<string>()
@@ -119,6 +148,11 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   keys.delete(e.key.toLowerCase())
+})
+
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'f')
+    found = find()
 })
 
 function input() {
@@ -143,7 +177,7 @@ onMounted(animate)
 <template>
   <div class="p-6 container mx-auto @container">
     <div class="flex items-center justify-center">
-      <canvas ref="canvas" :width="width" :height="height" />
+      <canvas ref="canvas" :width="config.width" :height="config.height" />
     </div>
   </div>
 </template>

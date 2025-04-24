@@ -25,9 +25,12 @@ function createCircle(
 
 export const map = {
   config: {
+    width: 600,
+    height: 600,
     cx: 300,
     cy: 300,
     radius: 300,
+    gridCell: 30,
   },
   obstacles: [
   // outline
