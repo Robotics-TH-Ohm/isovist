@@ -38,28 +38,38 @@ const featuresDb = (() => grids.map(([x, y]) => {
   return { point, features }
 }))()
 
-const robot = new Robot({ x: 100, y: 100 })
-let found: Point | undefined
+const robot = ref(new Robot({ x: 100, y: 100 }))
+const found = shallowRef<{ position: Point | undefined, d: number }>()
 
 function find() {
-  const point = { x: robot.x, y: robot.y }
+  const point = { x: robot.value.x, y: robot.value.y }
   const points = cast(point, lines)
   const features = computeFeatures(point, points)
+  if (!features)
+    return
+
   let min = Number.POSITIVE_INFINITY
-  let found: Point | undefined
+  let position: Point | undefined
 
   for (const f of featuresDb) {
+    if (!f.features)
+      continue
+
     const d = euclidean(features, f.features)
     if (d < min) {
       min = d
-      found = f.point
+      position = f.point
     }
   }
 
-  return found
+  return { position, d: min }
 }
 
 const canvasEl = useTemplateRef('canvas')
+const drawConfig = ref({
+  grid: true,
+  robotRays: true,
+})
 
 function draw() {
   const canvas = canvasEl.value
@@ -72,20 +82,22 @@ function draw() {
   ctx.fillRect(0, 0, config.width, config.height)
 
   // Draw dots
-  for (const g of grids) {
-    const [x, y] = g
+  if (drawConfig.value.grid) {
+    for (const g of grids) {
+      const [x, y] = g
 
-    if (found && found.x === x && found.y === y) {
-      ctx.fillStyle = '#0ff'
-      ctx.beginPath()
-      ctx.arc(x, y, 6, 0, 2 * Math.PI)
-      ctx.fill()
-    }
-    else {
-      ctx.fillStyle = '#555'
-      ctx.beginPath()
-      ctx.arc(x, y, 3, 0, 2 * Math.PI)
-      ctx.fill()
+      if (found.value?.position?.x === x && found.value?.position?.y === y) {
+        ctx.fillStyle = '#FFFF00'
+        ctx.beginPath()
+        ctx.arc(x, y, 6, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      else {
+        ctx.fillStyle = '#555'
+        ctx.beginPath()
+        ctx.arc(x, y, 3, 0, 2 * Math.PI)
+        ctx.fill()
+      }
     }
   }
 
@@ -123,20 +135,22 @@ function draw() {
   })
 
   // Draw rays
-  // const points = cast({ x: robot.x, y: robot.y }, lines)
-  // ctx.lineWidth = 1
-  // ctx.strokeStyle = 'rgba(0,255,0,0.5)'
-  // points.forEach((p) => {
-  //   ctx.beginPath()
-  //   ctx.moveTo(robot.x, robot.y)
-  //   ctx.lineTo(p.x, p.y)
-  //   ctx.stroke()
-  // })
+  if (drawConfig.value.robotRays) {
+    const points = cast({ x: robot.value.x, y: robot.value.y }, lines)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgba(0,255,0,0.5)'
+    points.forEach((p) => {
+      ctx.beginPath()
+      ctx.moveTo(robot.value.x, robot.value.y)
+      ctx.lineTo(p.x, p.y)
+      ctx.stroke()
+    })
+  }
 
   // Draw robot
   ctx.fillStyle = '#f00'
   ctx.beginPath()
-  ctx.arc(robot.x, robot.y, 10, 0, 2 * Math.PI)
+  ctx.arc(robot.value.x, robot.value.y, 10, 0, 2 * Math.PI)
   ctx.fill()
 }
 
@@ -152,18 +166,18 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'f')
-    found = find()
+    found.value = find()
 })
 
 function input() {
   if (keys.has('w'))
-    robot.down()
+    robot.value.down()
   if (keys.has('s'))
-    robot.up()
+    robot.value.up()
   if (keys.has('a'))
-    robot.right()
+    robot.value.right()
   if (keys.has('d'))
-    robot.left()
+    robot.value.left()
 }
 
 function animate() {
@@ -175,9 +189,34 @@ onMounted(animate)
 </script>
 
 <template>
-  <div class="p-6 container mx-auto @container">
-    <div class="flex items-center justify-center">
+  <div class="p-6 container mx-auto">
+    <div class="flex flex-col items-center justify-center gap-6">
       <canvas ref="canvas" :width="config.width" :height="config.height" />
+
+      <div class="flex items-center gap-6">
+        <UCard>
+          <div class="grid gap-3">
+            <USwitch v-model="drawConfig.grid" label="Grid" />
+            <USwitch v-model="drawConfig.robotRays" label="Robot rays" />
+          </div>
+        </UCard>
+
+        <UCard>
+          <div class="font-mono grid gap-1">
+            <p><span class="font-extrabold text-success">W/A/S/D</span> to move</p>
+            <p><span class="font-extrabold text-success">F</span> to find grid position.</p>
+          </div>
+        </UCard>
+      </div>
+
+      <div>
+        <div class="font-mono">
+          <p>Robot: {{ robot.x }}x | {{ robot.y }}y</p>
+          <p>
+            Found: {{ found?.position?.x }}x | {{ found?.position?.y }}y | {{ found?.d }}d
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>

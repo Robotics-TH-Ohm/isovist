@@ -62,7 +62,10 @@ export function distPointToLine(point: Point, line: Line): number {
   return Math.hypot(point.x - projX, point.y - projY)
 }
 
-export function computeFeatures(point: Point, points: Point[]): Features {
+export function computeFeatures(point: Point, points: Point[]): Features | undefined {
+  if (!points.length) {
+    return
+  }
   const area = computeArea(points)
   const perimeter = computePerimeter(points)
   const ds = points.map(p => Math.hypot(p.x - point.x, p.y - point.y))
@@ -76,9 +79,13 @@ export function computeFeatures(point: Point, points: Point[]): Features {
 
 function computeArea(points: Point[]) {
   let area = 0
-  for (let i = 0; i < points.length - 1; i++) {
+  const n = points.length
+  if (n < 3) {
+    return 0
+  }
+  for (let i = 0; i < n; i++) {
     const a = points[i]
-    const b = points[(i + 1)]
+    const b = points[(i + 1) % n] // Use modulo for wrap-around
     area += a.x * b.y - b.x * a.y
   }
   return Math.abs(area) / 2
