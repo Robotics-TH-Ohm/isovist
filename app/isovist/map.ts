@@ -7,7 +7,7 @@ function createCircle(
   startAngle: number,
   endAngle: number,
 ) {
-  const segments = 48
+  const segments = 64
   const lines: Line[] = []
   const step = (endAngle - startAngle) / segments
   for (let i = 0; i < segments; i++) {
@@ -31,6 +31,7 @@ export const map = {
     cy: 300,
     radius: 300,
     gridCell: 30,
+    lineWidth: 3,
   },
   obstacles: [
   // outline
