@@ -6,6 +6,8 @@ import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
 import { cast, distPointToLine } from '~/isovist/utils'
 
+const colorMode = useColorMode()
+
 const mapConfig = map.config
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
@@ -118,7 +120,9 @@ function draw() {
     return
 
   // Draw background
-  ctx.fillStyle = 'oklch(20.5% 0 0)'
+  ctx.fillStyle = colorMode.value === 'dark'
+    ? 'oklch(20.5% 0 0)'
+    : '#fff'
   ctx.fillRect(0, 0, mapConfig.width, mapConfig.height)
 
   // Draw dots
@@ -127,13 +131,17 @@ function draw() {
       const [x, y] = g
 
       if (found.value?.position?.x === x && found.value?.position?.y === y) {
-        ctx.fillStyle = '#FFFF00'
+        ctx.fillStyle = colorMode.value === 'dark'
+          ? 'oklch(79.5% 0.184 86.047)'
+          : 'oklch(85.2% 0.199 91.936)'
         ctx.beginPath()
         ctx.arc(x, y, 6, 0, 2 * Math.PI)
         ctx.fill()
       }
       else {
-        ctx.fillStyle = '#555'
+        ctx.fillStyle = colorMode.value === 'dark'
+          ? 'oklch(55.6% 0 0)'
+          : 'oklch(70.8% 0 0)'
         ctx.beginPath()
         ctx.arc(x, y, 3, 0, 2 * Math.PI)
         ctx.fill()
@@ -142,7 +150,7 @@ function draw() {
   }
 
   // Draw obstacles
-  ctx.strokeStyle = '#fff'
+  ctx.strokeStyle = colorMode.value === 'dark' ? '#fff' : '#000'
   ctx.lineWidth = mapConfig.lineWidth
   obstacles.forEach((o) => {
     if (o.type === 'line') {
@@ -160,8 +168,8 @@ function draw() {
         ctx.lineTo(l.x2, l.y2)
       })
       ctx.closePath()
-      ctx.fillStyle = '#fff'
-      ctx.fill()
+      // ctx.fillStyle = colorMode.value === 'dark' ? '#fff' : '#000'
+      // ctx.fill()
       ctx.stroke()
       return
     }
@@ -178,7 +186,9 @@ function draw() {
   if (config.value.robot.rays) {
     const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
     ctx.lineWidth = 1
-    ctx.strokeStyle = 'rgba(0,255,0,0.5)'
+    ctx.strokeStyle = colorMode.value === 'dark'
+      ? 'oklch(72.3% 0.219 149.579)'
+      : 'oklch(79.2% 0.209 151.711)'
     points.forEach((p) => {
       ctx.beginPath()
       ctx.moveTo(robot.x.value, robot.y.value)
@@ -188,7 +198,9 @@ function draw() {
   }
 
   // Draw robot
-  ctx.fillStyle = '#f00'
+  ctx.fillStyle = colorMode.value === 'dark'
+    ? 'oklch(63.7% 0.237 25.331)'
+    : 'oklch(70.4% 0.191 22.216)'
   ctx.beginPath()
   ctx.arc(robot.x.value, robot.y.value, 10, 0, 2 * Math.PI)
   ctx.fill()
@@ -233,23 +245,45 @@ onMounted(animate)
 </script>
 
 <template>
-  <div class="p-6 mx-auto font-mono">
-    <div class="grid grid-cols-2 gap-6">
-      <div class="flex flex-col gap-6 items-center justify-center">
+  <div class="relative p-6 mx-auto font-mono @container">
+    <ColorMode class="absolute top-6 right-6" />
+    <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
+      <div class="flex flex-col gap-3 items-center justify-center">
+        <h1 class="font-extrabold text-xl">
+          Isovist
+        </h1>
         <canvas
           ref="canvas"
           :width="mapConfig.width"
           :height="mapConfig.height"
+          class="my-3"
         />
         <UCard>
           <div class="grid gap-1">
-            <p><span class="font-extrabold text-success">W/A/S/D</span> to move</p>
-            <p><span class="font-extrabold text-success">F</span> to find grid position.</p>
+            <p>
+              <span class="font-extrabold text-success">W/A/S/D</span> to move
+            </p>
+            <p>
+              <span class="font-extrabold text-success">F</span> to find grid position.
+            </p>
+          </div>
+        </UCard>
+
+        <UCard>
+          <div class="grid gap-3">
+            <p class="font-extrabold">
+              TODO
+            </p>
+            <p> - Remove node inside small circle or polygon obstacles</p>
+            <p> - Restricted Random Grid</p>
+            <p> - Hover on grid node</p>
+            <p> - Features (more?, description for each)</p>
+            <p> - Distances: maybe also cosine</p>
           </div>
         </UCard>
       </div>
 
-      <div class="w-full grid gap-3">
+      <div class="grid gap-3">
         <UCard>
           <div class="grid gap-3">
             <p class="font-extrabold">
