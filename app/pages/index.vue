@@ -1,21 +1,58 @@
 <script setup lang="ts">
-import type { Point } from '~/isovist/types'
-import { map } from '~/isovist/obstacle'
+import type { FeatureConfig, FeatureKey, Point } from '~/isovist/types'
+import { euclidean, manhattan } from '~/isovist/distances'
+import { computeFeatures, featureCheckboxes } from '~/isovist/features'
+import { map } from '~/isovist/map'
 import { Robot } from '~/isovist/robot'
-import { cast, computeFeatures, distPointToLine, euclidean } from '~/isovist/utils'
+import { cast, distPointToLine } from '~/isovist/utils'
 
-const config = map.config
+const mapConfig = map.config
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
-const area = config.radius ** 2
+const area = mapConfig.radius ** 2
 const gridThreshold = 5
+
+const config = ref<{
+  features: FeatureConfig
+  distance: 'euclidean' | 'manhattan'
+  draw: {
+    grid: true
+    rays: true
+  }
+}>({
+  features: {},
+  distance: 'euclidean',
+  draw: {
+    grid: true,
+    rays: true,
+  },
+})
+
+const featureKeys = ref<FeatureKey[]>([
+  'area',
+  'perimeter',
+  'areaPermeterRatio',
+  'circularity',
+  'dispersion',
+  'dispersionAbs',
+  'drift',
+  'maxRadialLength',
+  'meanRadialLength',
+  'minRadialLength',
+])
+watch(featureKeys, (keys) => {
+  config.value.features = {}
+  for (const k of keys) {
+    config.value.features[k] = true
+  }
+}, { immediate: true, deep: true })
 
 const grids = (() => {
   const arr: [number, number][] = []
-  for (let x = 0; x <= config.width; x += config.gridCell) {
-    for (let y = 0; y <= config.height; y += config.gridCell) {
-      const dx = x - config.cx
-      const dy = y - config.cy
+  for (let x = 0; x <= mapConfig.width; x += mapConfig.gridCell) {
+    for (let y = 0; y <= mapConfig.height; y += mapConfig.gridCell) {
+      const dx = x - mapConfig.cx
+      const dy = y - mapConfig.cy
       const distSq = dx * dx + dy * dy
       if (distSq > area)
         continue
@@ -31,12 +68,12 @@ const grids = (() => {
   return arr
 })()
 
-const featuresDb = (() => grids.map(([x, y]) => {
-  const point = { x, y }
-  const points = cast(point, lines)
-  const features = computeFeatures(point, points)
-  return { point, features }
-}))()
+const featureEntries = computed(() => grids.map(([x, y]) => {
+  const viewpoint = { x, y }
+  const points = cast(viewpoint, lines)
+  const features = computeFeatures(viewpoint, points, config.value.features)
+  return { point: viewpoint, features }
+}))
 
 const robot = ref(new Robot({ x: 100, y: 100 }))
 const found = shallowRef<{ position: Point | undefined, d: number }>()
@@ -44,32 +81,30 @@ const found = shallowRef<{ position: Point | undefined, d: number }>()
 function find() {
   const point = { x: robot.value.x, y: robot.value.y }
   const points = cast(point, lines)
-  const features = computeFeatures(point, points)
+  const features = computeFeatures(point, points, config.value.features)
   if (!features)
-    return
+    return { position: undefined, d: Number.POSITIVE_INFINITY }
 
-  let min = Number.POSITIVE_INFINITY
-  let position: Point | undefined
+  let minD = Number.POSITIVE_INFINITY
+  let nearest: Point | undefined
 
-  for (const f of featuresDb) {
-    if (!f.features)
+  const distanceFn = config.value.distance === 'euclidean' ? euclidean : manhattan
+
+  for (const entry of featureEntries.value) {
+    if (!entry.features)
       continue
 
-    const d = euclidean(features, f.features)
-    if (d < min) {
-      min = d
-      position = f.point
+    const d = distanceFn(features, entry.features)
+    if (d < minD) {
+      minD = d
+      nearest = entry.point
     }
   }
 
-  return { position, d: min }
+  return { position: nearest, d: minD }
 }
 
 const canvasEl = useTemplateRef('canvas')
-const drawConfig = ref({
-  grid: true,
-  robotRays: true,
-})
 
 function draw() {
   const canvas = canvasEl.value
@@ -79,10 +114,10 @@ function draw() {
 
   // Draw background
   ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, config.width, config.height)
+  ctx.fillRect(0, 0, mapConfig.width, mapConfig.height)
 
   // Draw dots
-  if (drawConfig.value.grid) {
+  if (config.value.draw.grid) {
     for (const g of grids) {
       const [x, y] = g
 
@@ -135,7 +170,7 @@ function draw() {
   })
 
   // Draw rays
-  if (drawConfig.value.robotRays) {
+  if (config.value.draw.rays) {
     const points = cast({ x: robot.value.x, y: robot.value.y }, lines)
     ctx.lineWidth = 1
     ctx.strokeStyle = 'rgba(0,255,0,0.5)'
@@ -170,14 +205,18 @@ window.addEventListener('keydown', (e) => {
 })
 
 function input() {
-  if (keys.has('w'))
+  if (keys.has('w')) {
     robot.value.down()
-  if (keys.has('s'))
+  }
+  if (keys.has('s')) {
     robot.value.up()
-  if (keys.has('a'))
+  }
+  if (keys.has('a')) {
     robot.value.right()
-  if (keys.has('d'))
+  }
+  if (keys.has('d')) {
     robot.value.left()
+  }
 }
 
 function animate() {
@@ -189,33 +228,77 @@ onMounted(animate)
 </script>
 
 <template>
-  <div class="p-6 container mx-auto">
+  <div class="p-6 max-w-[648px] mx-auto font-mono">
     <div class="flex flex-col items-center justify-center gap-6">
-      <canvas ref="canvas" :width="config.width" :height="config.height" />
+      <canvas ref="canvas" :width="mapConfig.width" :height="mapConfig.height" />
 
-      <div class="flex items-center gap-6">
+      <div class="w-full grid gap-3">
         <UCard>
-          <div class="grid gap-3">
-            <USwitch v-model="drawConfig.grid" label="Grid" />
-            <USwitch v-model="drawConfig.robotRays" label="Robot rays" />
-          </div>
-        </UCard>
-
-        <UCard>
-          <div class="font-mono grid gap-1">
+          <div class="grid gap-1">
             <p><span class="font-extrabold text-success">W/A/S/D</span> to move</p>
             <p><span class="font-extrabold text-success">F</span> to find grid position.</p>
           </div>
         </UCard>
-      </div>
 
-      <div>
-        <div class="font-mono">
-          <p>Robot: {{ robot.x }}x | {{ robot.y }}y</p>
-          <p>
-            Found: {{ found?.position?.x }}x | {{ found?.position?.y }}y | {{ found?.d }}d
+        <UCard>
+          <p class="mb-2 font-extrabold">
+            Draw
           </p>
-        </div>
+          <div class="flex items-center gap-6">
+            <USwitch v-model="config.draw.grid" label="Grid" />
+            <USwitch v-model="config.draw.rays" label="Rays" />
+          </div>
+        </UCard>
+
+        <UCard>
+          <p class="mb-2 font-extrabold">
+            Features
+          </p>
+          <UCheckboxGroup
+            v-model="featureKeys"
+            :items="featureCheckboxes"
+          />
+        </UCard>
+
+        <UCard>
+          <p class="mb-2 font-extrabold">
+            Distances
+          </p>
+          <URadioGroup
+            v-model="config.distance"
+            orientation="horizontal"
+            :items="[
+              { label: 'Euclidean', value: 'euclidean' },
+              { label: 'Manhattan', value: 'manhattan' },
+            ]"
+            :ui="{ fieldset: 'gap-x-6' }"
+          />
+        </UCard>
+
+        <UCard>
+          <p class="mb-2 font-extrabold">
+            Robot
+          </p>
+
+          <div class="grid gap-1">
+            <label>
+              <span>Speed: </span>
+              <UInputNumber
+                :min="0"
+                :max="10"
+                orientation="vertical"
+                class="w-16"
+                default-value="1"
+              />
+              <span> (not works yet)</span>
+            </label>
+
+            <p>Robot: {{ robot.x }}x | {{ robot.y }}y</p>
+            <p>
+              Found: {{ found?.position?.x }}x | {{ found?.position?.y }}y | {{ found?.d }}d
+            </p>
+          </div>
+        </UCard>
       </div>
     </div>
   </div>

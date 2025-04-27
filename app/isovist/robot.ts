@@ -1,26 +1,28 @@
 interface Config {
   x?: number
   y?: number
+  speed?: number
 }
-
-const SPEED = 1
 
 export class Robot {
   x: number
   y: number
+  speed: number
 
   constructor(c: Config = {}) {
     const {
       x = 0,
       y = 0,
+      speed = 1,
     } = c
 
     this.x = x
     this.y = y
+    this.speed = speed
   }
 
-  up() { this.y += SPEED }
-  down() { this.y -= SPEED }
-  left() { this.x += SPEED }
-  right() { this.x -= SPEED }
+  up() { this.y += this.speed }
+  down() { this.y -= this.speed }
+  left() { this.x += this.speed }
+  right() { this.x -= this.speed }
 }

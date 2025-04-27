@@ -1,3 +1,5 @@
+import type { features } from './features'
+
 export interface Point {
   x: number
   y: number
@@ -21,10 +23,10 @@ export type Obstacle =
     line: Line
   }
 
-export interface Features {
-  area: number
-  perimeter: number
-  occlusivity: number
-  m1: number
-  m2: number
+export type FeatureKey = keyof typeof features['fns']
+export type Features = {
+  [K in FeatureKey]: number
+}
+export type FeatureConfig = {
+  [K in FeatureKey]?: boolean;
 }
