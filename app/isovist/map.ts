@@ -1,9 +1,9 @@
-import type { Line, Obstacle } from './types'
+import type { Line, MapConfig, Obstacle } from './types'
 
 function createCircle(
   cx: number,
   cy: number,
-  radius: number,
+  r: number,
   startAngle: number,
   endAngle: number,
 ) {
@@ -14,13 +14,18 @@ function createCircle(
     const a1 = startAngle + i * step
     const a2 = a1 + step
     lines.push({
-      x1: cx + Math.cos(a1) * radius,
-      y1: cy + Math.sin(a1) * radius,
-      x2: cx + Math.cos(a2) * radius,
-      y2: cy + Math.sin(a2) * radius,
+      x1: cx + Math.cos(a1) * r,
+      y1: cy + Math.sin(a1) * r,
+      x2: cx + Math.cos(a2) * r,
+      y2: cy + Math.sin(a2) * r,
     })
   }
-  return lines
+  return {
+    cx,
+    cy,
+    r,
+    lines,
+  }
 }
 
 export const map = {
@@ -29,15 +34,17 @@ export const map = {
     height: 600,
     cx: 300,
     cy: 300,
-    radius: 300,
-    gridCell: 30,
+    r: 300,
+    cell: 30,
     lineWidth: 3,
-  },
+  } satisfies MapConfig,
+
   obstacles: [
   // outline
     {
       type: 'circle',
-      lines: createCircle(300, 300, 299, 0, Math.PI * 2),
+      ...createCircle(300, 300, 298, 0, Math.PI * 2),
+      border: true,
     },
 
     // 1
@@ -57,7 +64,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(171, 250, 50, Math.PI / 2, 3 * Math.PI / 2),
+      ...createCircle(171, 250, 50, Math.PI / 2, 3 * Math.PI / 2),
     },
     {
       type: 'line',
@@ -75,7 +82,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(220, 250, 8, 0, Math.PI * 2),
+      ...createCircle(220, 250, 8, 0, Math.PI * 2),
       fill: true,
     },
     {
@@ -84,7 +91,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(219, 330, 30, Math.PI / 2, -Math.PI / 2),
+      ...createCircle(219, 330, 30, Math.PI / 2, -Math.PI / 2),
     },
     {
       type: 'line',
@@ -102,7 +109,11 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(269, 303, 75, Math.PI / 2, -Math.PI / 2),
+      ...createCircle(269, 303, 75, -Math.PI / 2, Math.PI / 6),
+    },
+    {
+      type: 'circle',
+      ...createCircle(269, 303, 75, Math.PI / 3, Math.PI / 2),
     },
     {
       type: 'line',
@@ -110,7 +121,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(280, 290, 20, 0, Math.PI * 2),
+      ...createCircle(280, 290, 20, 0, Math.PI * 2),
       fill: true,
     },
 
@@ -174,7 +185,7 @@ export const map = {
 
     {
       type: 'circle',
-      lines: createCircle(390, 260, 20, 3 * Math.PI / 4, 9 * Math.PI / 4),
+      ...createCircle(390, 260, 20, 3 * Math.PI / 4, 9 * Math.PI / 4),
     },
 
     // 6
@@ -188,7 +199,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(441, 340, 50, Math.PI / 2, 3 * Math.PI / 2),
+      ...createCircle(441, 340, 50, Math.PI / 2, 3 * Math.PI / 2),
     },
     {
       type: 'line',
@@ -196,7 +207,7 @@ export const map = {
     },
     {
       type: 'circle',
-      lines: createCircle(460, 340, 20, 0, Math.PI * 2),
+      ...createCircle(460, 340, 20, 0, Math.PI * 2),
       fill: true,
     },
 
@@ -213,12 +224,12 @@ export const map = {
     // Others
     {
       type: 'circle',
-      lines: createCircle(240, 60, 10, 0, Math.PI * 2),
+      ...createCircle(240, 60, 10, 0, Math.PI * 2),
       fill: true,
     },
     {
       type: 'circle',
-      lines: createCircle(240, 540, 10, 0, Math.PI * 2),
+      ...createCircle(240, 540, 10, 0, Math.PI * 2),
       fill: true,
     },
   ] satisfies Obstacle[],

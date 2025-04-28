@@ -1,37 +1,34 @@
 <script setup lang="ts">
 import type { FeatureConfig, FeatureKey, Point } from '~/isovist/types'
-import { euclidean, manhattan } from '~/isovist/distances'
-import { computeFeatures, featureCheckboxes } from '~/isovist/features'
+import { cosine, euclidean, manhattan } from '~/isovist/diff'
+import { computeFeatures, features } from '~/isovist/features'
+import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
-import { cast, distPointToLine } from '~/isovist/utils'
+import { cast } from '~/isovist/utils'
 
-const colorMode = useColorMode()
-
-const mapConfig = map.config
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
-const area = mapConfig.radius ** 2
 
 const config = ref<{
   features: FeatureConfig
-  distance: 'euclidean' | 'manhattan'
+  distance: 'euclidean' | 'manhattan' | 'cosine'
   grid: {
     show: boolean
-    random: boolean
+    type: 'orthogonal' | 'random'
   }
   robot: {
-    rays: true
+    rays: boolean
   }
 }>({
   features: {},
   distance: 'euclidean',
   grid: {
     show: true,
-    random: false,
+    type: 'orthogonal',
   },
   robot: {
-    rays: true,
+    rays: false,
   },
 })
 
@@ -54,36 +51,22 @@ watch(featureKeys, (keys) => {
   }
 }, { immediate: true, deep: true })
 
-const grids = (() => {
-  const arr: [number, number][] = []
-  for (let x = 0; x <= mapConfig.width; x += mapConfig.gridCell) {
-    for (let y = 0; y <= mapConfig.height; y += mapConfig.gridCell) {
-      const dx = x - mapConfig.cx
-      const dy = y - mapConfig.cy
-      const distSq = dx * dx + dy * dy
-      if (distSq > area)
-        continue
+const grid = computed(() => {
+  const fn = config.value.grid.type === 'orthogonal' ? orthogonalGrid : randomGrid
+  return fn({ map: map.config, obstacles })
+},
+)
 
-      const point = { x, y }
-      const isNear = lines.some(line => distPointToLine(point, line) <= mapConfig.lineWidth)
-      if (isNear)
-        continue
-
-      arr.push([x, y])
-    }
-  }
-  return arr
-})()
-
-const featureEntries = computed(() => grids.map(([x, y]) => {
+const featureEntries = computed(() => grid.value.map(([x, y]) => {
   const viewpoint = { x, y }
   const points = cast(viewpoint, lines)
   const features = computeFeatures(viewpoint, points, config.value.features)
   return { point: viewpoint, features }
 }))
 
-const robot = useRobot({ x: 100, y: 100 })
+const robot = useRobot({ x: 300, y: 90 })
 const found = shallowRef<{ position: Point | undefined, d: number }>()
+const hover = shallowRef<Point>()
 
 function find() {
   const point = { x: robot.x.value, y: robot.y.value }
@@ -95,7 +78,13 @@ function find() {
   let minD = Number.POSITIVE_INFINITY
   let nearest: Point | undefined
 
-  const distanceFn = config.value.distance === 'euclidean' ? euclidean : manhattan
+  const distanceFn = (() => {
+    switch (config.value.distance) {
+      case 'euclidean': return euclidean
+      case 'manhattan': return manhattan
+      case 'cosine': return cosine
+    }
+  })()
 
   for (const entry of featureEntries.value) {
     if (!entry.features)
@@ -119,29 +108,38 @@ function draw() {
   if (!ctx || !canvas)
     return
 
+  const style = getComputedStyle(document.documentElement)
+  const bgClr = style.getPropertyValue('--background-color-default')
+  const warningClr = style.getPropertyValue('--ui-warning')
+  const errorClr = style.getPropertyValue('--ui-error')
+  const successClr = style.getPropertyValue('--ui-success')
+  const infoClr = style.getPropertyValue('--ui-info')
+  const textClr = style.getPropertyValue('--ui-text')
+  const textMutedClr = style.getPropertyValue('--ui-text-muted')
+
   // Draw background
-  ctx.fillStyle = colorMode.value === 'dark'
-    ? 'oklch(20.5% 0 0)'
-    : '#fff'
-  ctx.fillRect(0, 0, mapConfig.width, mapConfig.height)
+  ctx.fillStyle = bgClr
+  ctx.fillRect(0, 0, map.config.width, map.config.height)
 
   // Draw dots
   if (config.value.grid.show) {
-    for (const g of grids) {
+    for (const g of grid.value) {
       const [x, y] = g
 
       if (found.value?.position?.x === x && found.value?.position?.y === y) {
-        ctx.fillStyle = colorMode.value === 'dark'
-          ? 'oklch(79.5% 0.184 86.047)'
-          : 'oklch(85.2% 0.199 91.936)'
+        ctx.fillStyle = warningClr
+        ctx.beginPath()
+        ctx.arc(x, y, 6, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      if (hover.value?.x === x && hover.value?.y === y) {
+        ctx.fillStyle = infoClr
         ctx.beginPath()
         ctx.arc(x, y, 6, 0, 2 * Math.PI)
         ctx.fill()
       }
       else {
-        ctx.fillStyle = colorMode.value === 'dark'
-          ? 'oklch(55.6% 0 0)'
-          : 'oklch(70.8% 0 0)'
+        ctx.fillStyle = textMutedClr
         ctx.beginPath()
         ctx.arc(x, y, 3, 0, 2 * Math.PI)
         ctx.fill()
@@ -150,9 +148,21 @@ function draw() {
   }
 
   // Draw obstacles
-  ctx.strokeStyle = colorMode.value === 'dark' ? '#fff' : '#000'
-  ctx.lineWidth = mapConfig.lineWidth
+  ctx.strokeStyle = textClr
+  ctx.lineWidth = map.config.lineWidth
   obstacles.forEach((o) => {
+    if ('border' in o && o.border) {
+      ctx.lineWidth = map.config.lineWidth * 1.5
+      o.lines.forEach((l) => {
+        ctx.beginPath()
+        ctx.moveTo(l.x1, l.y1)
+        ctx.lineTo(l.x2, l.y2)
+        ctx.stroke()
+      })
+      ctx.lineWidth = map.config.lineWidth
+      return
+    }
+
     if (o.type === 'line') {
       ctx.beginPath()
       ctx.moveTo(o.line.x1, o.line.y1)
@@ -168,7 +178,7 @@ function draw() {
         ctx.lineTo(l.x2, l.y2)
       })
       ctx.closePath()
-      // ctx.fillStyle = colorMode.value === 'dark' ? '#fff' : '#000'
+      // ctx.fillStyle = textClr
       // ctx.fill()
       ctx.stroke()
       return
@@ -186,9 +196,7 @@ function draw() {
   if (config.value.robot.rays) {
     const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
     ctx.lineWidth = 1
-    ctx.strokeStyle = colorMode.value === 'dark'
-      ? 'oklch(72.3% 0.219 149.579)'
-      : 'oklch(79.2% 0.209 151.711)'
+    ctx.strokeStyle = successClr
     points.forEach((p) => {
       ctx.beginPath()
       ctx.moveTo(robot.x.value, robot.y.value)
@@ -198,25 +206,45 @@ function draw() {
   }
 
   // Draw robot
-  ctx.fillStyle = colorMode.value === 'dark'
-    ? 'oklch(63.7% 0.237 25.331)'
-    : 'oklch(70.4% 0.191 22.216)'
+  ctx.fillStyle = errorClr
   ctx.beginPath()
   ctx.arc(robot.x.value, robot.y.value, 10, 0, 2 * Math.PI)
   ctx.fill()
 }
 
+useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
+  const canvas = canvasEl.value!
+  const rect = canvas.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  const threshold = map.config.lineWidth * 2
+
+  const entry = featureEntries.value.find((e) => {
+    return ((x - threshold) <= e.point.x && e.point.x <= (x + threshold))
+      && ((y - threshold) <= e.point.y && e.point.y <= (y + threshold))
+  },
+  )
+  if (entry) {
+    hover.value = entry.point
+    console.log(entry.features)
+  }
+}))
+
+useEventListener(canvasEl, 'mouseout', () => {
+  hover.value = undefined
+})
+
 const keys = new Set<string>()
 
-window.addEventListener('keydown', (e) => {
+useEventListener('keydown', (e) => {
   keys.add(e.key.toLowerCase())
 })
 
-window.addEventListener('keyup', (e) => {
+useEventListener('keyup', (e) => {
   keys.delete(e.key.toLowerCase())
 })
 
-window.addEventListener('keydown', (e) => {
+useEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'f')
     found.value = find()
 })
@@ -225,13 +253,13 @@ function input() {
   if (keys.has('w') && robot.y.value > 0) {
     robot.down()
   }
-  if (keys.has('s') && robot.y.value < mapConfig.height) {
+  if (keys.has('s') && robot.y.value < map.config.height) {
     robot.up()
   }
   if (keys.has('a') && robot.x.value > 0) {
     robot.right()
   }
-  if (keys.has('d') && robot.x.value < mapConfig.width) {
+  if (keys.has('d') && robot.x.value < map.config.width) {
     robot.left()
   }
 }
@@ -245,17 +273,17 @@ onMounted(animate)
 </script>
 
 <template>
-  <div class="relative p-6 mx-auto font-mono @container">
-    <ColorMode class="absolute top-6 right-6" />
+  <div class="p-6 mx-auto font-mono @container">
     <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
-      <div class="flex flex-col gap-3 items-center justify-center">
+      <div class="relative flex flex-col gap-3 items-center justify-center">
+        <ColorMode class="absolute top-0 right-0" />
         <h1 class="font-extrabold text-xl">
           Isovist
         </h1>
         <canvas
           ref="canvas"
-          :width="mapConfig.width"
-          :height="mapConfig.height"
+          :width="map.config.width"
+          :height="map.config.height"
           class="my-3"
         />
         <UCard>
@@ -274,9 +302,6 @@ onMounted(animate)
             <p class="font-extrabold">
               TODO
             </p>
-            <p> - Remove node inside small circle or polygon obstacles</p>
-            <p> - Restricted Random Grid</p>
-            <p> - Hover on grid node</p>
             <p> - Features (more?, description for each)</p>
             <p> - Distances: maybe also cosine</p>
           </div>
@@ -289,12 +314,21 @@ onMounted(animate)
             <p class="font-extrabold">
               Grid
             </p>
-            <div class="flex items-center gap-6">
-              <USwitch
-                v-model="config.grid.show"
-                label="Show"
-              />
-            </div>
+
+            <USwitch
+              v-model="config.grid.show"
+              label="Show"
+            />
+
+            <URadioGroup
+              v-model="config.grid.type"
+              orientation="horizontal"
+              :items="[
+                { label: 'Orthogonal', value: 'orthogonal' },
+                { label: 'Random', value: 'random' },
+              ]"
+              :ui="{ fieldset: 'gap-x-6' }"
+            />
             <p>
               Found: {{ found?.position?.x }}x | {{ found?.position?.y }}y | {{ found?.d }}d
             </p>
@@ -308,7 +342,7 @@ onMounted(animate)
             </p>
             <UCheckboxGroup
               v-model="featureKeys"
-              :items="featureCheckboxes"
+              :items="features.checkboxes"
             />
           </div>
         </UCard>
@@ -324,6 +358,7 @@ onMounted(animate)
               :items="[
                 { label: 'Euclidean', value: 'euclidean' },
                 { label: 'Manhattan', value: 'manhattan' },
+                { label: 'Cosine', value: 'consine' },
               ]"
               :ui="{ fieldset: 'gap-x-6' }"
             />

@@ -14,7 +14,16 @@ export interface Line {
 
 export type Obstacle =
   {
-    type: 'circle' | 'polygon'
+    type: 'circle'
+    lines: Line[]
+    cx: number
+    cy: number
+    r: number
+    fill?: boolean
+    border?: boolean
+  } |
+  {
+    type: 'polygon'
     lines: Line[]
     fill?: boolean
   }
@@ -22,6 +31,16 @@ export type Obstacle =
     type: 'line'
     line: Line
   }
+
+export interface MapConfig {
+  width: number
+  height: number
+  cx: number
+  cy: number
+  r: number
+  cell: number
+  lineWidth: number
+}
 
 export type FeatureKey = keyof typeof features['fns']
 export type Features = {
