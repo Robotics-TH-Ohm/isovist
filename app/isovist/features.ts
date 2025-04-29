@@ -9,7 +9,6 @@ const cache = {
 export const FEATURE_KEYS = [
   'area',
   'perimeter',
-  'visiblePerimeter',
   'occlusivity',
   'compactness',
   'radialMomentMean',
@@ -53,10 +52,6 @@ export const features: {
       }
 
       return perimeter
-    },
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    visiblePerimeter(viewpoint: Point, points: Point[]) {
-      return 0
     },
     compactness(viewpoint: Point, points: Point[]) {
       const perimeter = features.fns.perimeter(viewpoint, points)
@@ -114,11 +109,6 @@ export const features: {
       label: 'Perimeter',
       description: 'The total length of the isovist boundary.',
       value: 'perimeter',
-    },
-    {
-      label: 'Visible Perimeter',
-      description: 'The length of the original space boundary visible from the viewpoint.',
-      value: 'visiblePerimeter',
     },
     {
       label: 'Compactness',

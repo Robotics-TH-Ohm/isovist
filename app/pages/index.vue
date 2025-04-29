@@ -7,10 +7,7 @@ import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
 import { cast } from '~/isovist/utils'
 
-const obstacles = map.obstacles
-const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
-
-const config = useSessionStorage<{
+interface GlobalConfig {
   features: FeatureConfig
   distance: 'euclidean' | 'manhattan' | 'cosine'
   grid: {
@@ -20,22 +17,29 @@ const config = useSessionStorage<{
   robot: {
     rays: boolean
   }
-}>('isovist_config', () => ({
-  features: {},
-  distance: 'euclidean',
-  grid: {
-    show: true,
-    type: 'orthogonal',
-  },
-  robot: {
-    rays: false,
-  },
-}))
+}
+
+const obstacles = map.obstacles
+const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
+
+const config = useSessionStorage<GlobalConfig>(
+  'isovist_config',
+  () => ({
+    features: {},
+    distance: 'euclidean',
+    grid: {
+      show: true,
+      type: 'orthogonal',
+    },
+    robot: {
+      rays: false,
+    },
+  }),
+)
 
 const featureKeys = ref<FeatureKey[]>([
   'area',
   'perimeter',
-  'visiblePerimeter',
   'compactness',
   // 'occlusivity',
   'radialMomentMean',
@@ -52,8 +56,7 @@ watch(featureKeys, (keys) => {
 const grid = computed(() => {
   const fn = config.value.grid.type === 'orthogonal' ? orthogonalGrid : randomGrid
   return fn({ map: map.config, obstacles })
-},
-)
+})
 
 const featureEntries = computed(() => grid.value.map(([x, y]) => {
   const viewpoint = { x, y }
@@ -300,7 +303,7 @@ onMounted(animate)
             <p class="font-extrabold">
               TODO
             </p>
-            <p> - Features (Handle error)</p>
+            <p> - Features (Normalization before Diff, Handle error)</p>
             <p> - Found </p>
           </div>
         </UCard>
