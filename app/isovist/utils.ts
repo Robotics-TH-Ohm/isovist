@@ -1,8 +1,8 @@
 import type { Line, Point } from './types'
 
-export const EPS = 1e-10
+export const EPS = 1e-5
 
-export function cast(viewpoint: Point, lines: Line[], RAY_COUNT = 360, RAY_LENGTH = 1_000) {
+export function cast(viewpoint: Point, lines: Line[], RAY_COUNT = 360) {
   const points: Point[] = []
 
   for (let i = 0; i < RAY_COUNT; i++) {
@@ -11,8 +11,8 @@ export function cast(viewpoint: Point, lines: Line[], RAY_COUNT = 360, RAY_LENGT
     const dy = Math.sin(theta)
 
     let closet = {
-      x: viewpoint.x + dx * RAY_LENGTH,
-      y: viewpoint.y + dy * RAY_LENGTH,
+      x: viewpoint.x + dx,
+      y: viewpoint.y + dy,
     }
     let minD = Number.POSITIVE_INFINITY
 
@@ -21,13 +21,12 @@ export function cast(viewpoint: Point, lines: Line[], RAY_COUNT = 360, RAY_LENGT
       if (!point)
         continue
 
-      const d = Math.hypot(point.x - viewpoint.x, point.y - viewpoint.y)
+      const d = distPointToPoint(point, viewpoint)
       if (d < minD) {
         minD = d
         closet = point
       }
     }
-
     points.push(closet)
   }
 
@@ -104,4 +103,8 @@ export function isPointInPolygon(viewpoint: Point, lines: Line[]) {
     0,
   )
   return count % 2 === 1
+}
+
+export function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(v, max))
 }

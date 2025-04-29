@@ -10,7 +10,7 @@ import { cast } from '~/isovist/utils'
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
 
-const config = ref<{
+const config = useSessionStorage<{
   features: FeatureConfig
   distance: 'euclidean' | 'manhattan' | 'cosine'
   grid: {
@@ -20,7 +20,7 @@ const config = ref<{
   robot: {
     rays: boolean
   }
-}>({
+}>('isovist_config', () => ({
   features: {},
   distance: 'euclidean',
   grid: {
@@ -30,19 +30,17 @@ const config = ref<{
   robot: {
     rays: false,
   },
-})
+}))
 
 const featureKeys = ref<FeatureKey[]>([
   'area',
   'perimeter',
-  'areaPermeterRatio',
-  'circularity',
-  'dispersion',
-  'dispersionAbs',
-  'drift',
-  'maxRadialLength',
-  'meanRadialLength',
-  'minRadialLength',
+  'visiblePerimeter',
+  'compactness',
+  // 'occlusivity',
+  'radialMomentMean',
+  'radialMomentVariance',
+  'radialMomentSkewness',
 ])
 watch(featureKeys, (keys) => {
   config.value.features = {}
@@ -64,7 +62,7 @@ const featureEntries = computed(() => grid.value.map(([x, y]) => {
   return { point: viewpoint, features }
 }))
 
-const robot = useRobot({ x: 300, y: 90 })
+const robot = useRobot({ x: 300, y: 90, speed: 1 })
 const found = shallowRef<{ position: Point | undefined, d: number }>()
 const hover = shallowRef<Point>()
 
@@ -126,24 +124,10 @@ function draw() {
     for (const g of grid.value) {
       const [x, y] = g
 
-      if (found.value?.position?.x === x && found.value?.position?.y === y) {
-        ctx.fillStyle = warningClr
-        ctx.beginPath()
-        ctx.arc(x, y, 6, 0, 2 * Math.PI)
-        ctx.fill()
-      }
-      if (hover.value?.x === x && hover.value?.y === y) {
-        ctx.fillStyle = infoClr
-        ctx.beginPath()
-        ctx.arc(x, y, 6, 0, 2 * Math.PI)
-        ctx.fill()
-      }
-      else {
-        ctx.fillStyle = textMutedClr
-        ctx.beginPath()
-        ctx.arc(x, y, 3, 0, 2 * Math.PI)
-        ctx.fill()
-      }
+      ctx.fillStyle = textMutedClr
+      ctx.beginPath()
+      ctx.arc(x, y, 3, 0, 2 * Math.PI)
+      ctx.fill()
     }
   }
 
@@ -197,12 +181,27 @@ function draw() {
     const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
     ctx.lineWidth = 1
     ctx.strokeStyle = successClr
+    ctx.globalAlpha = 0.5
     points.forEach((p) => {
       ctx.beginPath()
       ctx.moveTo(robot.x.value, robot.y.value)
       ctx.lineTo(p.x, p.y)
       ctx.stroke()
     })
+    ctx.globalAlpha = 1.0
+  }
+
+  if (found.value?.position) {
+    ctx.fillStyle = warningClr
+    ctx.beginPath()
+    ctx.arc(found.value.position.x, found.value.position.y, 6, 0, 2 * Math.PI)
+    ctx.fill()
+  }
+  if (hover.value) {
+    ctx.fillStyle = infoClr
+    ctx.beginPath()
+    ctx.arc(hover.value.x, hover.value.y, 6, 0, 2 * Math.PI)
+    ctx.fill()
   }
 
   // Draw robot
@@ -226,7 +225,6 @@ useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
   )
   if (entry) {
     hover.value = entry.point
-    console.log(entry.features)
   }
 }))
 
@@ -302,8 +300,8 @@ onMounted(animate)
             <p class="font-extrabold">
               TODO
             </p>
-            <p> - Features (more?, description for each)</p>
-            <p> - Distances: maybe also cosine</p>
+            <p> - Features (Handle error)</p>
+            <p> - Found </p>
           </div>
         </UCard>
       </div>

@@ -1,4 +1,4 @@
-import type { features } from './features'
+import type { FEATURE_KEYS } from './features'
 
 export interface Point {
   x: number
@@ -42,7 +42,7 @@ export interface MapConfig {
   lineWidth: number
 }
 
-export type FeatureKey = keyof typeof features['fns']
+export type FeatureKey = typeof FEATURE_KEYS[number]
 export type Features = {
   [K in FeatureKey]: number
 }

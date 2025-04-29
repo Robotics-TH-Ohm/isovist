@@ -1,17 +1,30 @@
 import type { CheckboxGroupItem } from '@nuxt/ui'
 import type { FeatureConfig, FeatureKey, Features, Point } from './types'
-import { centroid, distPointToPoint } from './utils'
+import { clamp, distPointToPoint } from './utils'
 
-export const features = {
+const cache = {
+  moments: new Map<string, { m1: number, m2: number, m3: number }>(),
+}
+
+export const FEATURE_KEYS = [
+  'area',
+  'perimeter',
+  'visiblePerimeter',
+  'occlusivity',
+  'compactness',
+  'radialMomentMean',
+  'radialMomentVariance',
+  'radialMomentSkewness',
+] as const
+
+export const features: {
+  fns: Record<FeatureKey, (viewpoint: Point, points: Point[]) => number>
+  checkboxes: (CheckboxGroupItem & { value: FeatureKey })[]
+} = {
   fns: {
     area(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.area.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
       const n = points.length
       if (n < 3) {
-        features.cache.area.set(JSON.stringify(viewpoint), 0)
         return 0
       }
 
@@ -19,21 +32,16 @@ export const features = {
       for (let i = 0; i < n; i++) {
         const cur = points[i]
         const next = i + 1 === n ? points[0] : points[(i + 1)]
-        sum += cur.x * next.y - next.x * cur.y
+        const prev = i === 0 ? points[n - 1] : points[i - 1]
+        sum += cur.x * (next.y - prev.y)
       }
 
       const area = 0.5 * Math.abs(sum)
-      features.cache.area.set(JSON.stringify(viewpoint), area)
       return area
     },
     perimeter(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.perimeter.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
       const n = points.length
       if (n < 2) {
-        features.cache.perimeter.set(JSON.stringify(viewpoint), 0)
         return 0
       }
 
@@ -44,204 +52,103 @@ export const features = {
         perimeter += distPointToPoint(cur, next)
       }
 
-      features.cache.perimeter.set(JSON.stringify(viewpoint), perimeter)
       return perimeter
     },
-    areaPermeterRatio(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.areaPermeterRatio.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
-      const area = features.fns.area(viewpoint, points)
+    // eslint-disable-next-line unused-imports/no-unused-vars
+    visiblePerimeter(viewpoint: Point, points: Point[]) {
+      return 0
+    },
+    compactness(viewpoint: Point, points: Point[]) {
       const perimeter = features.fns.perimeter(viewpoint, points)
       if (perimeter === 0) {
-        features.cache.areaPermeterRatio.set(JSON.stringify(viewpoint), 0)
         return 0
       }
-
-      const ratio = area / perimeter
-      features.cache.areaPermeterRatio.set(JSON.stringify(viewpoint), ratio)
-      return ratio
-    },
-    circularity(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.circularity.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
 
       const area = features.fns.area(viewpoint, points)
-      if (area === 0) {
-        features.cache.circularity.set(JSON.stringify(viewpoint), 0)
-        return 0
-      }
-
-      const mean = features.fns.meanRadialLength(viewpoint, points)
-      const circularity = (Math.PI * mean * mean) / area
-      features.cache.circularity.set(JSON.stringify(viewpoint), circularity)
-      return circularity
+      const compactness = (4 * Math.PI * area) / (perimeter ** 2)
+      return compactness
     },
-    dispersion(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.dispersion.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
-      const n = points.length
-      if (n < 2) {
-        features.cache.dispersion.set(JSON.stringify(viewpoint), 0)
-        return 0
-      }
-
-      const { dists, sum: distSum } = points.reduce((acc, point) => {
-        const d = distPointToPoint(viewpoint, point)
-        acc.dists.push(d)
-        acc.sum += d
-        return acc
-      }, { dists: [] as number[], sum: 0 })
-
-      const mean = distSum / n
-      const diffSum = dists.reduce((acc, d) => acc + (d - mean) ** 2, 0)
-      const variance = diffSum / n
-      const std = Math.sqrt(variance)
-
-      const dispersion = mean - std
-      features.cache.dispersion.set(JSON.stringify(viewpoint), dispersion)
-      return dispersion
+    // eslint-disable-next-line unused-imports/no-unused-vars
+    occlusivity(viewpoint: Point, points: Point[]) {
+      return 0
     },
-    dispersionAbs(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.dispersionAbs.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
+    radialMomentMean(viewpoint: Point, points: Point[]) {
+      const cacheKey = JSON.stringify(viewpoint)
+      const _moments = cache.moments.get(cacheKey)
+      if (_moments)
+        return _moments.m1
 
-      const dispersionAbs = Math.abs(features.fns.dispersion(viewpoint, points))
-      features.cache.dispersionAbs.set(JSON.stringify(viewpoint), dispersionAbs)
-      return dispersionAbs
+      const moments = computedMoments(viewpoint, points)
+      cache.moments.set(cacheKey, moments)
+      return moments.m1
     },
-    drift(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.drift.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
+    radialMomentVariance(viewpoint: Point, points: Point[]) {
+      const cacheKey = JSON.stringify(viewpoint)
+      const _moments = cache.moments.get(cacheKey)
+      if (_moments)
+        return _moments.m2
 
-      const area = features.fns.area(viewpoint, points)
-      const _centroid = centroid(points, area)
-
-      const drift = _centroid ? distPointToPoint(viewpoint, _centroid) : 0
-      features.cache.drift.set(JSON.stringify(viewpoint), drift)
-      return drift
+      const moments = computedMoments(viewpoint, points)
+      cache.moments.set(cacheKey, moments)
+      return moments.m2
     },
-    maxRadialLength(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.maxRadialLength.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
+    radialMomentSkewness(viewpoint: Point, points: Point[]) {
+      const cacheKey = JSON.stringify(viewpoint)
+      const _moments = cache.moments.get(cacheKey)
+      if (_moments)
+        return _moments.m3
 
-      const n = points.length
-      if (n === 0) {
-        features.cache.maxRadialLength.set(JSON.stringify(viewpoint), 0)
-        return 0
-      }
-
-      const maxRadialLength = Math.max(...points.map(p => distPointToPoint(viewpoint, p)))
-      features.cache.maxRadialLength.set(JSON.stringify(viewpoint), maxRadialLength)
-      return maxRadialLength
+      const moments = computedMoments(viewpoint, points)
+      cache.moments.set(cacheKey, moments)
+      return moments.m3
     },
-    meanRadialLength(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.meanRadialLength.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
-      const n = points.length
-      if (n === 0) {
-        features.cache.meanRadialLength.set(JSON.stringify(viewpoint), 0)
-        return 0
-      }
-
-      const sum = points.reduce((acc, p) => acc + distPointToPoint(viewpoint, p), 0)
-
-      const meanRadialLength = sum / n
-      features.cache.meanRadialLength.set(JSON.stringify(viewpoint), meanRadialLength)
-      return meanRadialLength
-    },
-    minRadialLength(viewpoint: Point, points: Point[]) {
-      const cache = features.cache.minRadialLength.get(JSON.stringify(viewpoint))
-      if (cache === 0 || cache)
-        return cache
-
-      const n = points.length
-      if (n === 0) {
-        features.cache.minRadialLength.set(JSON.stringify(viewpoint), 0)
-        return 0
-      }
-
-      const minRadialLength = Math.min(...points.map(p => distPointToPoint(viewpoint, p)))
-      features.cache.minRadialLength.set(JSON.stringify(viewpoint), minRadialLength)
-      return minRadialLength
-    },
-  },
-
-  cache: {
-    area: new Map<string, number>(),
-    perimeter: new Map<string, number>(),
-    areaPermeterRatio: new Map<string, number>(),
-    circularity: new Map<string, number>(),
-    dispersion: new Map<string, number>(),
-    dispersionAbs: new Map<string, number>(),
-    drift: new Map<string, number>(),
-    maxRadialLength: new Map<string, number>(),
-    meanRadialLength: new Map<string, number>(),
-    minRadialLength: new Map<string, number>(),
   },
 
   checkboxes: [
     {
       label: 'Area',
-      description: 'This is the description.',
+      description: 'The total visible area from the viewpoint.',
       value: 'area',
     },
     {
       label: 'Perimeter',
-      description: 'This is the description.',
+      description: 'The total length of the isovist boundary.',
       value: 'perimeter',
     },
     {
-      label: 'Area Perimeter Ratio',
-      description: 'This is the description.',
-      value: 'areaPermeterRatio',
+      label: 'Visible Perimeter',
+      description: 'The length of the original space boundary visible from the viewpoint.',
+      value: 'visiblePerimeter',
     },
     {
-      label: 'Circularity',
-      description: 'This is the description.',
-      value: 'circularity',
+      label: 'Compactness',
+      description: 'A measure of how "circular" the visible area is (higher values are less compact).',
+      value: 'compactness',
     },
     {
-      label: 'Dispersion',
-      description: 'This is the description.',
-      value: 'dispersion',
+      label: 'Occlusivity',
+      description: 'The length of the isovist boundary formed by interior obstacles.',
+      value: 'occlusivity',
+      disabled: true,
     },
     {
-      label: 'Absolute Dispersion',
-      description: 'This is the description.',
-      value: 'dispersionAbs',
+      label: 'Radial Moment Mean',
+      description: 'The average visible distance from the viewpoint to the boundary.',
+      value: 'radialMomentMean',
     },
     {
-      label: 'Drift',
-      description: 'This is the description.',
-      value: 'drift',
+      label: 'Radial Moment Variance',
+      description: 'How much the visible distance varies in different directions.',
+      value: 'radialMomentVariance',
     },
     {
-      label: 'Maximum Radial Length',
-      description: 'This is the description.',
-      value: 'maxRadialLength',
+      label: 'Radial Moment Skewness',
+      description: 'The asymmetry of the visible distance distribution (indicates longer or shorter views in some directions).',
+      value: 'radialMomentSkewness',
     },
-    {
-      label: 'Mean Radial Length',
-      description: 'This is the description.',
-      value: 'meanRadialLength',
-    },
-    {
-      label: 'Minimum Radial Length',
-      description: 'This is the description.',
-      value: 'minRadialLength',
-    },
-  ] satisfies (CheckboxGroupItem)[],
-} as const
+  ],
+
+}
 
 export function computeFeatures(viewpoint: Point, points: Point[], config: FeatureConfig) {
   const result: Partial<Features> = {}
@@ -250,4 +157,112 @@ export function computeFeatures(viewpoint: Point, points: Point[], config: Featu
     result[key] = features.fns[key](viewpoint, points)
   }
   return result
+}
+
+function computedMoments(viewpoint: Point, points: Point[]) {
+  const n = points.length
+  if (n < 3) {
+    return { m1: 0, m2: 0, m3: 0 }
+  }
+
+  let a1Sum = 0
+  let a2Sum = 0
+  let a3Sum = 0
+
+  for (let i = 0; i < n; i++) {
+    const cur = points[i]
+    const next = i + 1 === n ? points[0] : points[(i + 1)]
+
+    const a = distPointToPoint(viewpoint, cur)
+    const b = distPointToPoint(viewpoint, next)
+    const c = distPointToPoint(cur, next)
+    const { alpha, beta, gamma } = computeAngles({ a, b, c })
+    const params = { a, b, c, alpha, beta, gamma }
+
+    const _a1 = computeA1(params)
+    const _a2 = computeA2(params)
+    const _a3 = computedA3(params)
+
+    a1Sum += _a1
+    a2Sum += _a2
+    a3Sum += _a3
+  }
+
+  const a1 = a1Sum / (2 * Math.PI)
+  const a2 = a2Sum / (2 * Math.PI)
+  const a3 = a3Sum / (2 * Math.PI)
+
+  const m1 = a1
+  const m2 = a2 - m1 ** 2
+  const m3 = a3 - 3 * m1 * a2 + 2 * m1 ** 3
+  return { m1, m2, m3 }
+}
+
+function computeAngles({ a, b, c }: { a: number, b: number, c: number }) {
+  const cosGamma = (a * a + b * b - c * c) / (2 * a * b)
+  const cosAlpha = (b * b + c * c - a * a) / (2 * b * c)
+  const cosBeta = (a * a + c * c - b * b) / (2 * a * c)
+
+  const clampedCosGamma = clamp(cosGamma, -1.0, 1.0)
+  const clampedCosAlpha = clamp(cosAlpha, -1.0, 1.0)
+  const clampedCosBeta = clamp(cosBeta, -1.0, 1.0)
+
+  const gamma = Math.acos(clampedCosGamma)
+  const alpha = Math.acos(clampedCosAlpha)
+  const beta = Math.acos(clampedCosBeta)
+
+  return { alpha, beta, gamma }
+}
+
+interface ComputeAiParams {
+  a: number
+  b: number
+  c: number
+  alpha: number
+  beta: number
+  gamma: number
+}
+function computeA1({ a, b, c, gamma }: ComputeAiParams) {
+  const _1st = a * b / c
+
+  const _2nd = Math.sin(gamma) / gamma
+
+  const cosGamma = Math.cos(gamma)
+  const _3rdNum = (c + a - b * cosGamma) * (c + b - a * cosGamma)
+  const _3rdDenom = a * b * Math.sin(gamma) ** 2
+  const _3rd = Math.log(_3rdNum / _3rdDenom)
+
+  return _1st * _2nd * _3rd
+}
+
+function computeA2({ a, b, c, alpha, beta, gamma }: ComputeAiParams) {
+  const _1st = 1 / gamma
+  const _2nd = (a * b * Math.sin(gamma) / c) ** 2
+  const _3rd = cot(alpha) + cot(beta)
+  return _1st * _2nd * _3rd
+}
+
+function computedA3({ a, b, c, alpha, beta, gamma }: ComputeAiParams) {
+  const _1st = 1 / (2 * gamma)
+  const _2nd = (a * b * Math.sin(gamma) / c) ** 3
+
+  const cosecAlpha = cosec(alpha)
+  const cotAlpha = cot(alpha)
+  const cosecBeta = cosec(beta)
+  const cotBeta = cot(beta)
+  const _3rdLeft = cosecAlpha * cotAlpha + cosecBeta * cotBeta
+  const _3rdRight = Math.log((cosecAlpha + cotAlpha) * (cosecBeta + cotBeta))
+  const _3rd = _3rdLeft + _3rdRight
+
+  return _1st * _2nd * _3rd
+}
+
+function cot(angle: number) {
+  const tan = Math.tan(angle)
+  return 1 / tan
+}
+
+function cosec(angle: number) {
+  const sin = Math.sin(angle)
+  return 1 / sin
 }
