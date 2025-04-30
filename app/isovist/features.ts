@@ -1,27 +1,31 @@
 import type { CheckboxGroupItem } from '@nuxt/ui'
 import type { FeatureConfig, FeatureKey, Features, Point } from './types'
-import { clamp, distPointToPoint } from './utils'
-
-const cache = {
-  moments: new Map<string, { m1: number, m2: number, m3: number }>(),
-}
+import { centroid, clamp, distPointToPoint } from './utils'
 
 export const FEATURE_KEYS = [
   'area',
   'perimeter',
-  'occlusivity',
   'compactness',
+  'occlusivity',
+  'drift',
+  'radialLengthMin',
+  'radialLengthMean',
+  'radialLengthMax',
   'radialMomentMean',
   'radialMomentVariance',
   'radialMomentSkewness',
 ] as const
+
+const cache = {
+  moments: new Map<string, { m1: number, m2: number, m3: number }>(),
+}
 
 export const features: {
   fns: Record<FeatureKey, (viewpoint: Point, points: Point[]) => number>
   checkboxes: (CheckboxGroupItem & { value: FeatureKey })[]
 } = {
   fns: {
-    area(viewpoint: Point, points: Point[]) {
+    area(_, points) {
       const n = points.length
       if (n < 3) {
         return 0
@@ -38,7 +42,7 @@ export const features: {
       const area = 0.5 * Math.abs(sum)
       return area
     },
-    perimeter(viewpoint: Point, points: Point[]) {
+    perimeter(_, points) {
       const n = points.length
       if (n < 2) {
         return 0
@@ -53,7 +57,7 @@ export const features: {
 
       return perimeter
     },
-    compactness(viewpoint: Point, points: Point[]) {
+    compactness(viewpoint, points) {
       const perimeter = features.fns.perimeter(viewpoint, points)
       if (perimeter === 0) {
         return 0
@@ -63,11 +67,42 @@ export const features: {
       const compactness = (4 * Math.PI * area) / (perimeter ** 2)
       return compactness
     },
-    // eslint-disable-next-line unused-imports/no-unused-vars
-    occlusivity(viewpoint: Point, points: Point[]) {
+    occlusivity() {
       return 0
     },
-    radialMomentMean(viewpoint: Point, points: Point[]) {
+    drift(viewpoint, points) {
+      const area = features.fns.area(viewpoint, points)
+      const _centroid = centroid(points, area)
+      if (!_centroid)
+        return 0
+
+      return distPointToPoint(viewpoint, _centroid)
+    },
+    radialLengthMin(viewpoint, points) {
+      const n = points.length
+      if (n === 0)
+        return 0
+
+      const lengths = points.map(p => distPointToPoint(viewpoint, p))
+      return Math.min(...lengths)
+    },
+    radialLengthMean(viewpoint, points) {
+      const n = points.length
+      if (n === 0)
+        return 0
+
+      const sum = points.reduce((acc, p) => acc + distPointToPoint(viewpoint, p), 0)
+      return sum / n
+    },
+    radialLengthMax(viewpoint, points) {
+      const n = points.length
+      if (n === 0)
+        return 0
+
+      const lengths = points.map(p => distPointToPoint(viewpoint, p))
+      return Math.max(...lengths)
+    },
+    radialMomentMean(viewpoint, points) {
       const cacheKey = JSON.stringify(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
@@ -77,7 +112,7 @@ export const features: {
       cache.moments.set(cacheKey, moments)
       return moments.m1
     },
-    radialMomentVariance(viewpoint: Point, points: Point[]) {
+    radialMomentVariance(viewpoint, points) {
       const cacheKey = JSON.stringify(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
@@ -87,7 +122,7 @@ export const features: {
       cache.moments.set(cacheKey, moments)
       return moments.m2
     },
-    radialMomentSkewness(viewpoint: Point, points: Point[]) {
+    radialMomentSkewness(viewpoint, points) {
       const cacheKey = JSON.stringify(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
@@ -112,7 +147,7 @@ export const features: {
     },
     {
       label: 'Compactness',
-      description: 'A measure of how "circular" the visible area is (higher values are less compact).',
+      description: 'A measure of how "circular" the visible area is (higher values mean more circular/compact).',
       value: 'compactness',
     },
     {
@@ -122,8 +157,28 @@ export const features: {
       disabled: true,
     },
     {
+      label: 'Drift',
+      description: 'Distance from viewpoint to the balance point of the visible area. Lower is more central.',
+      value: 'drift',
+    },
+    {
+      label: 'Radial Length Min',
+      description: 'Distance to the closest visible boundary.',
+      value: 'radialLengthMin',
+    },
+    {
+      label: 'Radial Length Mean',
+      description: 'Average distance to the visible boundary. Represents overall openness.',
+      value: 'radialLengthMean',
+    },
+    {
+      label: 'Radial Length Max',
+      description: 'Distance to the furthest visible boundary (longest line of sight).',
+      value: 'radialLengthMax',
+    },
+    {
       label: 'Radial Moment Mean',
-      description: 'The average visible distance from the viewpoint to the boundary.',
+      description: 'The average distance from the viewpoint to the isovist vertices.',
       value: 'radialMomentMean',
     },
     {

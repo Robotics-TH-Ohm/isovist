@@ -11,7 +11,7 @@ export function orthogonalGrid(c: Config) {
   const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
   const filled = obstacles.filter(o => 'fill' in o && o.fill)
 
-  const grid: [number, number][] = []
+  const grid: Point[] = []
 
   for (let x = 0; x <= map.width; x += map.cell) {
     for (let y = 0; y <= map.height; y += map.cell) {
@@ -40,7 +40,7 @@ export function orthogonalGrid(c: Config) {
       if (isNear)
         continue
 
-      grid.push([x, y])
+      grid.push({ x, y })
     }
   }
   return grid
@@ -87,14 +87,14 @@ export function randomGrid(c: Config) {
     }
   }
 
-  const grid: [number, number][] = []
+  const grid: Point[] = []
   const length = 239
   const initalLength = Math.floor(length / 2)
 
   while (grid.length < initalLength) {
     const p = randomPoint()
     if (p)
-      grid.push([p.x, p.y])
+      grid.push(p)
   }
 
   const candidateLength = 10
@@ -113,7 +113,7 @@ export function randomGrid(c: Config) {
     for (const candidate of candidates) {
       let min = Number.POSITIVE_INFINITY
       for (const g of grid) {
-        const d = distPointToPoint({ x: g[0], y: g[1] }, candidate)
+        const d = distPointToPoint(g, candidate)
         if (min > d) {
           min = d
         }
@@ -125,7 +125,7 @@ export function randomGrid(c: Config) {
     }
 
     if (best) {
-      grid.push([best.x, best.y])
+      grid.push(best)
     }
   }
 

@@ -5,7 +5,7 @@ import { computeFeatures, features } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
-import { cast } from '~/isovist/utils'
+import { cast, EPS } from '~/isovist/utils'
 
 interface GlobalConfig {
   features: FeatureConfig
@@ -42,6 +42,10 @@ const featureKeys = ref<FeatureKey[]>([
   'perimeter',
   'compactness',
   // 'occlusivity',
+  'drift',
+  'radialLengthMin',
+  'radialLengthMean',
+  'radialLengthMax',
   'radialMomentMean',
   'radialMomentVariance',
   'radialMomentSkewness',
@@ -58,26 +62,72 @@ const grid = computed(() => {
   return fn({ map: map.config, obstacles })
 })
 
-const featureEntries = computed(() => grid.value.map(([x, y]) => {
-  const viewpoint = { x, y }
-  const points = cast(viewpoint, lines)
-  const features = computeFeatures(viewpoint, points, config.value.features)
-  return { point: viewpoint, features }
-}))
+const db = computed(() => {
+  const entries = grid.value.map((viewpoint) => {
+    const points = cast(viewpoint, lines)
+    const features = computeFeatures(viewpoint, points, config.value.features)
+    return { viewpoint, features }
+  })
+
+  const keys = featureKeys.value
+
+  const lim = {} as Record<FeatureKey, { min: number, max: number }>
+  for (const k of keys) {
+    for (const entry of entries) {
+      const features = entry.features
+      if (!lim[k]) {
+        lim[k] = {
+          min: Number.POSITIVE_INFINITY,
+          max: Number.NEGATIVE_INFINITY,
+        }
+      }
+
+      if (!features[k])
+        continue
+
+      if (features[k] < lim[k].min) {
+        lim[k].min = features[k]
+      }
+
+      if (features[k] > lim[k].max) {
+        lim[k].max = features[k]
+      }
+    }
+  }
+
+  for (const k of keys) {
+    const { min, max } = lim[k]
+    const denom = max - min
+
+    for (const entry of entries) {
+      const features = entry.features
+      if (!features[k])
+        continue
+
+      features[k] = Math.abs(denom) < EPS ? 0 : (features[k] - min) / denom
+    }
+  }
+
+  return { lim, entries }
+})
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
-const found = shallowRef<{ position: Point | undefined, d: number }>()
+const found = shallowRef<Point[]>()
 const hover = shallowRef<Point>()
 
-function find() {
+function find(k = 5) {
   const point = { x: robot.x.value, y: robot.y.value }
   const points = cast(point, lines)
   const features = computeFeatures(point, points, config.value.features)
   if (!features)
-    return { position: undefined, d: Number.POSITIVE_INFINITY }
+    return
 
-  let minD = Number.POSITIVE_INFINITY
-  let nearest: Point | undefined
+  const keys = featureKeys.value
+  for (const k of keys) {
+    const { min, max } = db.value.lim[k]
+    const denom = max - min
+    features[k] = Math.abs(denom) < EPS ? 0 : (features[k]! - min) / denom
+  }
 
   const distanceFn = (() => {
     switch (config.value.distance) {
@@ -87,18 +137,19 @@ function find() {
     }
   })()
 
-  for (const entry of featureEntries.value) {
+  const matches: { viewpoint: Point, d: number }[] = []
+  for (const entry of db.value.entries) {
     if (!entry.features)
       continue
 
     const d = distanceFn(features, entry.features)
-    if (d < minD) {
-      minD = d
-      nearest = entry.point
-    }
+    matches.push({ viewpoint: entry.viewpoint, d })
   }
 
-  return { position: nearest, d: minD }
+  matches.sort((a, b) => a.d - b.d)
+  const topk = matches.slice(0, k)
+
+  return topk.map(x => x.viewpoint)
 }
 
 const canvasEl = useTemplateRef('canvas')
@@ -125,11 +176,9 @@ function draw() {
   // Draw dots
   if (config.value.grid.show) {
     for (const g of grid.value) {
-      const [x, y] = g
-
       ctx.fillStyle = textMutedClr
       ctx.beginPath()
-      ctx.arc(x, y, 3, 0, 2 * Math.PI)
+      ctx.arc(g.x, g.y, 3, 0, 2 * Math.PI)
       ctx.fill()
     }
   }
@@ -194,11 +243,14 @@ function draw() {
     ctx.globalAlpha = 1.0
   }
 
-  if (found.value?.position) {
+  if (found.value) {
     ctx.fillStyle = warningClr
-    ctx.beginPath()
-    ctx.arc(found.value.position.x, found.value.position.y, 6, 0, 2 * Math.PI)
-    ctx.fill()
+    let i = 0
+    for (const f of found.value) {
+      ctx.beginPath()
+      ctx.arc(f.x, f.y, 8 - i++, 0, 2 * Math.PI)
+      ctx.fill()
+    }
   }
   if (hover.value) {
     ctx.fillStyle = infoClr
@@ -221,14 +273,16 @@ useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
   const y = event.clientY - rect.top
   const threshold = map.config.lineWidth * 2
 
-  const entry = featureEntries.value.find((e) => {
-    return ((x - threshold) <= e.point.x && e.point.x <= (x + threshold))
-      && ((y - threshold) <= e.point.y && e.point.y <= (y + threshold))
-  },
-  )
-  if (entry) {
-    hover.value = entry.point
-  }
+  const entry = db.value.entries.find((e) => {
+    const nearX = (x - threshold) <= e.viewpoint.x && e.viewpoint.x <= (x + threshold)
+    const nearY = (y - threshold) <= e.viewpoint.y && e.viewpoint.y <= (y + threshold)
+    return nearX && nearY
+  })
+
+  if (!entry)
+    return
+
+  hover.value = entry.viewpoint
 }))
 
 useEventListener(canvasEl, 'mouseout', () => {
@@ -313,26 +367,47 @@ onMounted(animate)
         <UCard>
           <div class="grid gap-3">
             <p class="font-extrabold">
+              Display
+            </p>
+            <div class="flex gap-6">
+              <USwitch
+                v-model="config.grid.show"
+                label="Grid points"
+              />
+              <USwitch
+                v-model="config.robot.rays"
+                label="Robot rays"
+              />
+            </div>
+          </div>
+        </UCard>
+
+        <UCard>
+          <div class="grid gap-3">
+            <p class="font-extrabold">
               Grid
             </p>
-
-            <USwitch
-              v-model="config.grid.show"
-              label="Show"
-            />
 
             <URadioGroup
               v-model="config.grid.type"
               orientation="horizontal"
               :items="[
                 { label: 'Orthogonal', value: 'orthogonal' },
-                { label: 'Random', value: 'random' },
+                { label: 'Restricted random', value: 'random' },
               ]"
               :ui="{ fieldset: 'gap-x-6' }"
             />
-            <p>
-              Found: {{ found?.position?.x }}x | {{ found?.position?.y }}y | {{ found?.d }}d
-            </p>
+            <div
+              v-if="found"
+              class="flex gap-2"
+            >
+              <span
+                v-for="f, i of found"
+                :key="`${f.x}_${f.y}`"
+              >
+                {{ i + 1 }}. {{ f.x }}x | {{ f.y }}y
+              </span>
+            </div>
           </div>
         </UCard>
 
@@ -359,7 +434,7 @@ onMounted(animate)
               :items="[
                 { label: 'Euclidean', value: 'euclidean' },
                 { label: 'Manhattan', value: 'manhattan' },
-                { label: 'Cosine', value: 'consine' },
+                { label: 'Cosine', value: 'cosine' },
               ]"
               :ui="{ fieldset: 'gap-x-6' }"
             />
@@ -371,10 +446,7 @@ onMounted(animate)
             <p class="mb-2 font-extrabold">
               Robot
             </p>
-            <USwitch
-              v-model="config.robot.rays"
-              label="Rays"
-            />
+
             <label>
               <span>Speed: </span>
               <UInputNumber

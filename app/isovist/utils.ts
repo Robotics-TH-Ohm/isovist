@@ -71,25 +71,24 @@ export function distPointToPoint(a: Point, b: Point) {
 
 export function centroid(points: Point[], area: number) {
   const n = points.length
-
-  if (area === 0 || n < 3) {
+  if (area < EPS || n < 3) {
     return
   }
 
-  let sumCx = 0
-  let sumCy = 0
+  let sumx = 0
+  let sumy = 0
 
   for (let i = 0; i < n; i++) {
     const cur = points[i]
     const next = i + 1 === n ? points[0] : points[(i + 1)]
     const product = cur.x * next.y - next.x * cur.y
 
-    sumCx += (cur.x + next.x) * product
-    sumCy += (cur.y + next.y) * product
+    sumx += (cur.x + next.x) * product
+    sumy += (cur.y + next.y) * product
   }
 
-  const x = sumCx / (6 * area)
-  const y = sumCy / (6 * area)
+  const x = sumx / (6 * area)
+  const y = sumy / (6 * area)
   return { x, y }
 }
 
