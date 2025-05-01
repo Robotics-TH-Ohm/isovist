@@ -1,5 +1,5 @@
 import type { CheckboxGroupItem } from '@nuxt/ui'
-import type { FeatureConfig, FeatureKey, Features, Point } from './types'
+import type { FeatureKey, Features, Point } from './types'
 import { centroid, clamp, distPointToPoint, EPS } from './utils'
 
 export const FEATURE_KEYS = [
@@ -206,11 +206,10 @@ export const features: {
   ],
 }
 
-export function computeFeatures(viewpoint: Point, points: Point[], config: FeatureConfig) {
+export function computeFeatures(viewpoint: Point, points: Point[], keys: FeatureKey[]) {
   const result: Partial<Features> = {}
-  for (const k in config) {
-    const key = k as FeatureKey
-    result[key] = features.fns[key](viewpoint, points)
+  for (const k of keys) {
+    result[k] = features.fns[k](viewpoint, points)
   }
   return result
 }

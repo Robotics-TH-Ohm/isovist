@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FeatureConfig, FeatureKey, Point } from '~/isovist/types'
+import type { FeatureKey, Point } from '~/isovist/types'
 import { cosine, euclidean, manhattan } from '~/isovist/diff'
 import { computeFeatures, features } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
@@ -8,7 +8,7 @@ import { useRobot } from '~/isovist/robot'
 import { cast, EPS } from '~/isovist/utils'
 
 interface GlobalConfig {
-  features: FeatureConfig
+  features: FeatureKey[]
   distance: 'euclidean' | 'manhattan' | 'cosine'
   grid: {
     show: boolean
@@ -25,7 +25,7 @@ const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
 const config = useSessionStorage<GlobalConfig>(
   'isovist_config',
   () => ({
-    features: {},
+    features: [],
     distance: 'euclidean',
     grid: {
       show: true,
@@ -37,25 +37,17 @@ const config = useSessionStorage<GlobalConfig>(
   }),
 )
 
-const featureKeys = ref<FeatureKey[]>([
-  'area',
-  'perimeter',
-  'compactness',
-  // 'occlusivity',
-  'drift',
-  'radialLengthMin',
-  'radialLengthMean',
-  'radialLengthMax',
-  'radialMomentMean',
-  'radialMomentVariance',
-  'radialMomentSkewness',
-])
-watch(featureKeys, (keys) => {
-  config.value.features = {}
+function checkAllFeatureKeys() {
+  config.value.features = []
+  const keys = features.checkboxes.flatMap(c => 'disabled' in c && c.disabled ? [] : [c.value])
   for (const k of keys) {
-    config.value.features[k] = true
+    config.value.features.push(k)
   }
-}, { immediate: true, deep: true })
+}
+
+function clearAllFeatureKeys() {
+  config.value.features = []
+}
 
 const grid = computed(() => {
   const fn = config.value.grid.type === 'orthogonal' ? orthogonalGrid : randomGrid
@@ -69,7 +61,7 @@ const db = computed(() => {
     return { viewpoint, features }
   })
 
-  const keys = featureKeys.value
+  const keys = Array.from(config.value.features)
 
   const lim = {} as Record<FeatureKey, { min: number, max: number }>
   for (const k of keys) {
@@ -112,22 +104,27 @@ const db = computed(() => {
 })
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
-const found = shallowRef<Point[]>()
+const topkPoints = shallowRef<Point[]>()
 const hover = shallowRef<Point>()
 
-function find(k = 5) {
-  const point = { x: robot.x.value, y: robot.y.value }
-  const points = cast(point, lines)
-  const features = computeFeatures(point, points, config.value.features)
-  if (!features)
-    return
+function find(k = 5, step = 5) {
+  const viewpoints = []
 
-  const keys = featureKeys.value
-  for (const k of keys) {
-    const { min, max } = db.value.lim[k]
-    const denom = max - min
-    features[k] = Math.abs(denom) < EPS ? 0 : (features[k]! - min) / denom
+  if (step) {
+    for (let dx = -step; dx <= step; dx += step) {
+      for (let dy = -step; dy <= step; dy += step) {
+        viewpoints.push({
+          x: robot.state.value.x + dx,
+          y: robot.state.value.y + dy,
+        })
+      }
+    }
   }
+  else {
+    viewpoints.push({ x: robot.state.value.x, y: robot.state.value.y })
+  }
+
+  const keys = Array.from(config.value.features)
 
   const distanceFn = (() => {
     switch (config.value.distance) {
@@ -137,18 +134,33 @@ function find(k = 5) {
     }
   })()
 
-  const matches: { viewpoint: Point, d: number }[] = []
-  for (const entry of db.value.entries) {
-    if (!entry.features)
+  const topkSet = new Set<{ viewpoint: Point, d: number }>()
+  for (const viewpoint of viewpoints) {
+    const points = cast(viewpoint, lines)
+    const features = computeFeatures(viewpoint, points, config.value.features)
+    if (!features)
       continue
 
-    const d = distanceFn(features, entry.features)
-    matches.push({ viewpoint: entry.viewpoint, d })
+    for (const k of keys) {
+      const { min, max } = db.value.lim[k]
+      const denom = max - min
+      features[k] = Math.abs(denom) < EPS ? 0 : (features[k]! - min) / denom
+    }
+
+    const matches: { viewpoint: Point, d: number }[] = []
+    for (const entry of db.value.entries) {
+      if (!entry.features)
+        continue
+
+      const d = distanceFn(features, entry.features)
+      matches.push({ viewpoint: entry.viewpoint, d })
+    }
+    matches.sort((a, b) => a.d - b.d)
+    for (const m of matches.slice(0, k)) {
+      topkSet.add(m)
+    }
   }
-
-  matches.sort((a, b) => a.d - b.d)
-  const topk = matches.slice(0, k)
-
+  const topk = Array.from(topkSet).sort((a, b) => a.d - b.d).slice(0, k)
   return topk.map(x => x.viewpoint)
 }
 
@@ -214,7 +226,7 @@ function draw() {
         ctx.lineTo(l.x2, l.y2)
       })
       ctx.closePath()
-      // ctx.fillStyle = textClr
+      ctx.fillStyle = textClr
       // ctx.fill()
       ctx.stroke()
       return
@@ -230,40 +242,55 @@ function draw() {
 
   // Draw rays
   if (config.value.robot.rays) {
-    const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
+    const points = cast({ x: robot.state.value.x, y: robot.state.value.y }, lines)
     ctx.lineWidth = 1
     ctx.strokeStyle = successClr
     ctx.globalAlpha = 0.5
     points.forEach((p) => {
       ctx.beginPath()
-      ctx.moveTo(robot.x.value, robot.y.value)
+      ctx.moveTo(robot.state.value.x, robot.state.value.y)
       ctx.lineTo(p.x, p.y)
       ctx.stroke()
     })
     ctx.globalAlpha = 1.0
   }
 
-  if (found.value) {
+  // Draw robot
+  ctx.fillStyle = errorClr
+  ctx.beginPath()
+  ctx.arc(robot.state.value.x, robot.state.value.y, 10, 0, 2 * Math.PI)
+  ctx.fill()
+
+  // Draw topk
+  if (topkPoints.value) {
     ctx.fillStyle = warningClr
     let i = 0
-    for (const f of found.value) {
+    for (const k of topkPoints.value) {
       ctx.beginPath()
-      ctx.arc(f.x, f.y, 8 - i++, 0, 2 * Math.PI)
+      ctx.arc(k.x, k.y, 8 - i++, 0, 2 * Math.PI)
       ctx.fill()
     }
   }
+
+  // Draw hover node
   if (hover.value) {
+    const points = cast({ x: hover.value.x, y: hover.value.y }, lines)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = successClr
+    ctx.globalAlpha = 0.5
+    points.forEach((p) => {
+      ctx.beginPath()
+      ctx.moveTo(hover.value!.x, hover.value!.y)
+      ctx.lineTo(p.x, p.y)
+      ctx.stroke()
+    })
+    ctx.globalAlpha = 1.0
+
     ctx.fillStyle = infoClr
     ctx.beginPath()
     ctx.arc(hover.value.x, hover.value.y, 6, 0, 2 * Math.PI)
     ctx.fill()
   }
-
-  // Draw robot
-  ctx.fillStyle = errorClr
-  ctx.beginPath()
-  ctx.arc(robot.x.value, robot.y.value, 10, 0, 2 * Math.PI)
-  ctx.fill()
 }
 
 useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
@@ -301,20 +328,20 @@ useEventListener('keyup', (e) => {
 
 useEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'f')
-    found.value = find()
+    topkPoints.value = find()
 })
 
 function input() {
-  if (keys.has('w') && robot.y.value > 0) {
+  if (keys.has('w') && robot.state.value.y > 0) {
     robot.down()
   }
-  if (keys.has('s') && robot.y.value < map.config.height) {
+  if (keys.has('s') && robot.state.value.y < map.config.height) {
     robot.up()
   }
-  if (keys.has('a') && robot.x.value > 0) {
+  if (keys.has('a') && robot.state.value.x > 0) {
     robot.right()
   }
-  if (keys.has('d') && robot.x.value < map.config.width) {
+  if (keys.has('d') && robot.state.value.x < map.config.width) {
     robot.left()
   }
 }
@@ -352,13 +379,26 @@ onMounted(animate)
           </div>
         </UCard>
 
-        <UCard>
+        <UCard class="w-full @min-[1200px]:max-w-4/5">
           <div class="grid gap-3">
-            <p class="font-extrabold">
-              TODO
-            </p>
-            <p> - Features (Normalization before Diff, Handle error)</p>
-            <p> - Found </p>
+            <div>
+              <span class="font-extrabold">Robot: </span>
+              <span class="text-success">
+                ({{ robot.state.value.x }},{{ robot.state.value.y }})
+              </span>
+            </div>
+
+            <div class="flex flex-wrap gap-3 min-h-[2lh]">
+              <p class="font-extrabold">
+                Found points:
+              </p>
+              <span
+                v-for="f, i of topkPoints"
+                :key="i"
+              >
+                <span class="text-success">{{ i + 1 }}.</span>({{ f.x }},{{ f.y }})
+              </span>
+            </div>
           </div>
         </UCard>
       </div>
@@ -397,27 +437,33 @@ onMounted(animate)
               ]"
               :ui="{ fieldset: 'gap-x-6' }"
             />
-            <div
-              v-if="found"
-              class="flex gap-2"
-            >
-              <span
-                v-for="f, i of found"
-                :key="`${f.x}_${f.y}`"
-              >
-                {{ i + 1 }}. {{ f.x }}x | {{ f.y }}y
-              </span>
-            </div>
           </div>
         </UCard>
 
         <UCard>
           <div class="grid gap-3">
-            <p class="font-extrabold">
-              Features
-            </p>
+            <div class="flex items-center justify-between">
+              <p class="font-extrabold">
+                Features
+              </p>
+              <div class="flex gap-2">
+                <UButton
+                  size="xs"
+                  @click="checkAllFeatureKeys"
+                >
+                  Check all
+                </UButton>
+                <UButton
+                  size="xs"
+                  color="warning"
+                  @click="clearAllFeatureKeys"
+                >
+                  Clear all
+                </UButton>
+              </div>
+            </div>
             <UCheckboxGroup
-              v-model="featureKeys"
+              v-model="config.features"
               :items="features.checkboxes"
             />
           </div>
@@ -450,14 +496,13 @@ onMounted(animate)
             <label>
               <span>Speed: </span>
               <UInputNumber
-                v-model="robot.speed.value"
+                v-model="robot.state.value.speed"
                 :min="1"
                 :step="1"
                 orientation="vertical"
                 class="w-20"
               />
             </label>
-            <p>Robot: {{ robot.x }}x | {{ robot.y }}y</p>
           </div>
         </UCard>
       </div>

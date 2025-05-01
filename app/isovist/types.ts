@@ -46,6 +46,3 @@ export type FeatureKey = typeof FEATURE_KEYS[number]
 export type Features = {
   [K in FeatureKey]: number
 }
-export type FeatureConfig = {
-  [K in FeatureKey]?: boolean;
-}

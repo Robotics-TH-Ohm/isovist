@@ -12,22 +12,20 @@ export function useRobot(config: Config = {}) {
     ...config,
   }
 
-  const x = shallowRef(c.x)
-  const y = shallowRef(c.y)
-  const speed = shallowRef(c.speed)
+  const state = ref({ ...c })
 
   const up = () => {
-    y.value += speed.value
+    state.value.y += state.value.speed
   }
   const down = () => {
-    y.value -= speed.value
+    state.value.y -= state.value.speed
   }
   const left = () => {
-    x.value += speed.value
+    state.value.x += state.value.speed
   }
   const right = () => {
-    x.value -= speed.value
+    state.value.x -= state.value.speed
   }
 
-  return { x, y, speed, up, down, left, right }
+  return { state, up, down, left, right }
 }
