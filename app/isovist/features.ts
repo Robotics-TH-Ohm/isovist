@@ -1,6 +1,6 @@
 import type { CheckboxGroupItem } from '@nuxt/ui'
 import type { FeatureConfig, FeatureKey, Features, Point } from './types'
-import { centroid, clamp, distPointToPoint } from './utils'
+import { centroid, clamp, distPointToPoint, EPS } from './utils'
 
 export const FEATURE_KEYS = [
   'area',
@@ -103,34 +103,46 @@ export const features: {
       return Math.max(...lengths)
     },
     radialMomentMean(viewpoint, points) {
-      const cacheKey = JSON.stringify(viewpoint)
+      const cacheKey = computeCacheKey(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
         return _moments.m1
 
       const moments = computedMoments(viewpoint, points)
-      cache.moments.set(cacheKey, moments)
-      return moments.m1
+      if (moments) {
+        cache.moments.set(cacheKey, moments)
+        return moments.m1
+      }
+      cache.moments.set(cacheKey, { m1: 0, m2: 0, m3: 0 })
+      return 0
     },
     radialMomentVariance(viewpoint, points) {
-      const cacheKey = JSON.stringify(viewpoint)
+      const cacheKey = computeCacheKey(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
         return _moments.m2
 
       const moments = computedMoments(viewpoint, points)
-      cache.moments.set(cacheKey, moments)
-      return moments.m2
+      if (moments) {
+        cache.moments.set(cacheKey, moments)
+        return moments.m2
+      }
+      cache.moments.set(cacheKey, { m1: 0, m2: 0, m3: 0 })
+      return 0
     },
     radialMomentSkewness(viewpoint, points) {
-      const cacheKey = JSON.stringify(viewpoint)
+      const cacheKey = computeCacheKey(viewpoint)
       const _moments = cache.moments.get(cacheKey)
       if (_moments)
         return _moments.m3
 
       const moments = computedMoments(viewpoint, points)
-      cache.moments.set(cacheKey, moments)
-      return moments.m3
+      if (moments) {
+        cache.moments.set(cacheKey, moments)
+        return moments.m3
+      }
+      cache.moments.set(cacheKey, { m1: 0, m2: 0, m3: 0 })
+      return 0
     },
   },
 
@@ -163,36 +175,35 @@ export const features: {
     },
     {
       label: 'Radial Length Min',
-      description: 'Distance to the closest visible boundary.',
+      description: 'Minimum distance from the viewpoint to an isovist vertex.',
       value: 'radialLengthMin',
     },
     {
       label: 'Radial Length Mean',
-      description: 'Average distance to the visible boundary. Represents overall openness.',
+      description: 'Average distance from the viewpoint to the isovist vertices.',
       value: 'radialLengthMean',
     },
     {
       label: 'Radial Length Max',
-      description: 'Distance to the furthest visible boundary (longest line of sight).',
+      description: 'Maximum distance from the viewpoint to an isovist vertex.',
       value: 'radialLengthMax',
     },
     {
       label: 'Radial Moment Mean',
-      description: 'The average distance from the viewpoint to the isovist vertices.',
+      description: 'A measure of the average radial extent based on integration over the boundary segments.',
       value: 'radialMomentMean',
     },
     {
       label: 'Radial Moment Variance',
-      description: 'How much the visible distance varies in different directions.',
+      description: 'How much the visible distance varies in different directions (based on moments of boundary segments).',
       value: 'radialMomentVariance',
     },
     {
       label: 'Radial Moment Skewness',
-      description: 'The asymmetry of the visible distance distribution (indicates longer or shorter views in some directions).',
+      description: 'The asymmetry of the visible distance distribution (based on moments of boundary segments).',
       value: 'radialMomentSkewness',
     },
   ],
-
 }
 
 export function computeFeatures(viewpoint: Point, points: Point[], config: FeatureConfig) {
@@ -207,7 +218,7 @@ export function computeFeatures(viewpoint: Point, points: Point[], config: Featu
 function computedMoments(viewpoint: Point, points: Point[]) {
   const n = points.length
   if (n < 3) {
-    return { m1: 0, m2: 0, m3: 0 }
+    return
   }
 
   let a1Sum = 0
@@ -221,12 +232,23 @@ function computedMoments(viewpoint: Point, points: Point[]) {
     const a = distPointToPoint(viewpoint, cur)
     const b = distPointToPoint(viewpoint, next)
     const c = distPointToPoint(cur, next)
+    if (a === 0 || b === 0 || c === 0)
+      return
+
     const { alpha, beta, gamma } = computeAngles({ a, b, c })
+    if (Number.isNaN(alpha) || Number.isNaN(beta) || Number.isNaN(gamma)) {
+      return
+    }
+
     const params = { a, b, c, alpha, beta, gamma }
 
     const _a1 = computeA1(params)
     const _a2 = computeA2(params)
-    const _a3 = computedA3(params)
+    const _a3 = computeA3(params)
+
+    if (Number.isNaN(_a1) || Number.isNaN(_a2) || Number.isNaN(_a3)) {
+      return
+    }
 
     a1Sum += _a1
     a2Sum += _a2
@@ -259,7 +281,7 @@ function computeAngles({ a, b, c }: { a: number, b: number, c: number }) {
   return { alpha, beta, gamma }
 }
 
-interface ComputeAiParams {
+interface AiParams {
   a: number
   b: number
   c: number
@@ -267,7 +289,7 @@ interface ComputeAiParams {
   beta: number
   gamma: number
 }
-function computeA1({ a, b, c, gamma }: ComputeAiParams) {
+function computeA1({ a, b, c, gamma }: AiParams) {
   const _1st = a * b / c
 
   const _2nd = Math.sin(gamma) / gamma
@@ -275,19 +297,22 @@ function computeA1({ a, b, c, gamma }: ComputeAiParams) {
   const cosGamma = Math.cos(gamma)
   const _3rdNum = (c + a - b * cosGamma) * (c + b - a * cosGamma)
   const _3rdDenom = a * b * Math.sin(gamma) ** 2
+  if (_3rdDenom < EPS)
+    return Number.NaN
   const _3rd = Math.log(_3rdNum / _3rdDenom)
 
   return _1st * _2nd * _3rd
 }
 
-function computeA2({ a, b, c, alpha, beta, gamma }: ComputeAiParams) {
+function computeA2({ a, b, c, alpha, beta, gamma }: AiParams) {
   const _1st = 1 / gamma
   const _2nd = (a * b * Math.sin(gamma) / c) ** 2
   const _3rd = cot(alpha) + cot(beta)
+
   return _1st * _2nd * _3rd
 }
 
-function computedA3({ a, b, c, alpha, beta, gamma }: ComputeAiParams) {
+function computeA3({ a, b, c, alpha, beta, gamma }: AiParams) {
   const _1st = 1 / (2 * gamma)
   const _2nd = (a * b * Math.sin(gamma) / c) ** 3
 
@@ -304,10 +329,14 @@ function computedA3({ a, b, c, alpha, beta, gamma }: ComputeAiParams) {
 
 function cot(angle: number) {
   const tan = Math.tan(angle)
-  return 1 / tan
+  return tan < EPS ? Number.NaN : 1 / tan
 }
 
 function cosec(angle: number) {
   const sin = Math.sin(angle)
-  return 1 / sin
+  return sin < EPS ? Number.NaN : 1 / sin
+}
+
+function computeCacheKey(viewpoint: Point) {
+  return `${viewpoint.x.toFixed(6)},${viewpoint.y.toFixed(6)}`
 }
