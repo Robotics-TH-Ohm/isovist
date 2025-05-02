@@ -1,10 +1,13 @@
 <script setup lang="ts">
+const title = 'Kidnapped Robot and Isovist'
+const description = `Simulated robot localization based on isovist feature matching. Analyze visible space geometry to determine the robot's position on a grid map.`
+
 useHead({
-  title: 'Kidnapped Robot and Isovist',
+  title,
   meta: [
     { charset: 'utf-8' },
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-    { name: 'description', content: 'Kidnapped Robot and Isovist' },
+    { name: 'description', content: description },
   ],
   link: [
     { rel: 'icon', href: '/bot.svg' },

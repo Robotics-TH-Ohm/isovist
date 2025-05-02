@@ -365,7 +365,7 @@ onMounted(animate)
     <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
       <div class="relative flex flex-col gap-3 items-center justify-center">
         <ColorMode class="absolute top-0 right-0" />
-        <h1 class="text-success text-xl mt-3 tracking-widest">
+        <h1 class="text-success font-bold text-xl mt-3 tracking-widest">
           Kidnapped Robot and Isovist
         </h1>
         <canvas
