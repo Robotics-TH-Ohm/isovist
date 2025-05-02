@@ -446,20 +446,19 @@ onMounted(animate)
               ]"
               :ui="{ fieldset: 'gap-x-10', item: 'items-center' }"
             >
-              <template
-                #label="{ item, modelValue }"
-              >
+              <template #label="{ item, modelValue }">
                 <div
                   v-if="(item as any).value === 'random' && modelValue === 'random'"
                   class="flex items-center gap-2"
                 >
-                  <span>{{ (item as any).label }}</span>
+                  <span>{{ (item as any).label }} with </span>
                   <UInputNumber
                     v-model="config.grid.nums"
                     size="sm"
                     orientation="vertical"
                     class="w-20"
                   />
+                  <span>nodes</span>
                 </div>
               </template>
             </URadioGroup>

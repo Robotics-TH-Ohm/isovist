@@ -159,7 +159,7 @@ export const features: {
     },
     {
       label: 'Compactness',
-      description: 'A measure of how "circular" the visible area is (higher values mean more circular/compact).',
+      description: 'A measure of how "circular" the visible area is.',
       value: 'compactness',
     },
     {
@@ -195,12 +195,12 @@ export const features: {
     },
     {
       label: 'Radial Moment Variance',
-      description: 'How much the visible distance varies in different directions (based on moments of boundary segments).',
+      description: 'How much the visible distance varies in different directions.',
       value: 'radialMomentVariance',
     },
     {
       label: 'Radial Moment Skewness',
-      description: 'The asymmetry of the visible distance distribution (based on moments of boundary segments).',
+      description: 'The asymmetry of the visible distance distribution.',
       value: 'radialMomentSkewness',
     },
   ],
