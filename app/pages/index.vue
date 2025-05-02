@@ -364,7 +364,15 @@ onMounted(animate)
   <div class="p-6 mx-auto font-mono @container">
     <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
       <div class="relative flex flex-col gap-3 items-center justify-center">
-        <ColorMode class="absolute top-0 right-0" />
+        <div class="absolute top-0 right-0 flex gap-2">
+          <UButton
+            icon="i-lucide-github"
+            variant="soft"
+            to="https://github.com/chubetho/isovist"
+            target="_blank"
+          />
+          <ColorMode />
+        </div>
         <h1 class="text-success font-bold text-xl mt-3 tracking-widest">
           Kidnapped Robot and Isovist
         </h1>
