@@ -365,14 +365,14 @@ onMounted(animate)
     <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
       <div class="relative flex flex-col gap-3 items-center justify-center">
         <ColorMode class="absolute top-0 right-0" />
-        <h1 class="font-extrabold text-xl">
-          Isovist
+        <h1 class="text-success text-xl mt-3 tracking-widest">
+          Kidnapped Robot and Isovist
         </h1>
         <canvas
           ref="canvas"
           :width="map.config.width"
           :height="map.config.height"
-          class="my-3"
+          class="my-6"
         />
         <UCard>
           <div class="grid gap-1">
@@ -413,58 +413,6 @@ onMounted(animate)
       </div>
 
       <div class="grid gap-3">
-        <UCard>
-          <div class="grid gap-3">
-            <p class="font-extrabold">
-              Display
-            </p>
-            <div class="flex gap-10">
-              <USwitch
-                v-model="config.grid.show"
-                label="Grid points"
-              />
-              <USwitch
-                v-model="config.robot.rays"
-                label="Robot rays"
-              />
-            </div>
-          </div>
-        </UCard>
-
-        <UCard>
-          <div class="grid gap-3">
-            <p class="font-extrabold">
-              Grid
-            </p>
-
-            <URadioGroup
-              v-model="config.grid.type"
-              orientation="horizontal"
-              :items="[
-                { label: 'Orthogonal', value: 'orthogonal' },
-                { label: 'Restricted random', value: 'random' },
-              ]"
-              :ui="{ fieldset: 'gap-x-10', item: 'items-center' }"
-            >
-              <template #label="{ item, modelValue }">
-                <div
-                  v-if="(item as any).value === 'random' && modelValue === 'random'"
-                  class="flex items-center gap-2"
-                >
-                  <span>{{ (item as any).label }} with </span>
-                  <UInputNumber
-                    v-model="config.grid.nums"
-                    size="sm"
-                    orientation="vertical"
-                    class="w-20"
-                  />
-                  <span>nodes</span>
-                </div>
-              </template>
-            </URadioGroup>
-          </div>
-        </UCard>
-
         <UCard>
           <div class="grid gap-3">
             <div class="flex items-center justify-between">
@@ -509,6 +457,58 @@ onMounted(animate)
               ]"
               :ui="{ fieldset: 'gap-x-10' }"
             />
+          </div>
+        </UCard>
+
+        <UCard>
+          <div class="grid gap-3">
+            <p class="font-extrabold">
+              Grid
+            </p>
+
+            <URadioGroup
+              v-model="config.grid.type"
+              orientation="horizontal"
+              :items="[
+                { label: 'Orthogonal', value: 'orthogonal' },
+                { label: 'Restricted random', value: 'random' },
+              ]"
+              :ui="{ fieldset: 'gap-x-10', item: 'items-center' }"
+            >
+              <template #label="{ item, modelValue }">
+                <div
+                  v-if="(item as any).value === 'random' && modelValue === 'random'"
+                  class="flex items-center gap-2"
+                >
+                  <span>{{ (item as any).label }} with </span>
+                  <UInputNumber
+                    v-model="config.grid.nums"
+                    size="sm"
+                    orientation="vertical"
+                    class="w-20"
+                  />
+                  <span>nodes</span>
+                </div>
+              </template>
+            </URadioGroup>
+          </div>
+        </UCard>
+
+        <UCard>
+          <div class="grid gap-3">
+            <p class="font-extrabold">
+              Display
+            </p>
+            <div class="flex gap-10">
+              <USwitch
+                v-model="config.grid.show"
+                label="Grid points"
+              />
+              <USwitch
+                v-model="config.robot.rays"
+                label="Robot rays"
+              />
+            </div>
           </div>
         </UCard>
 
