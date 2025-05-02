@@ -232,11 +232,11 @@ function computedMoments(viewpoint: Point, points: Point[]) {
     const b = distPointToPoint(viewpoint, next)
     const c = distPointToPoint(cur, next)
     if (a === 0 || b === 0 || c === 0)
-      return
+      continue
 
     const { alpha, beta, gamma } = computeAngles({ a, b, c })
     if (Number.isNaN(alpha) || Number.isNaN(beta) || Number.isNaN(gamma)) {
-      return
+      continue
     }
 
     const params = { a, b, c, alpha, beta, gamma }
@@ -246,7 +246,7 @@ function computedMoments(viewpoint: Point, points: Point[]) {
     const _a3 = computeA3(params)
 
     if (Number.isNaN(_a1) || Number.isNaN(_a2) || Number.isNaN(_a3)) {
-      return
+      continue
     }
 
     a1Sum += _a1

@@ -13,6 +13,7 @@ interface GlobalConfig {
   grid: {
     show: boolean
     type: 'orthogonal' | 'random'
+    nums: number
   }
   robot: {
     rays: boolean
@@ -30,6 +31,7 @@ const config = useSessionStorage<GlobalConfig>(
     grid: {
       show: true,
       type: 'orthogonal',
+      nums: 239,
     },
     robot: {
       rays: false,
@@ -51,7 +53,7 @@ function clearAllFeatureKeys() {
 
 const grid = computed(() => {
   const fn = config.value.grid.type === 'orthogonal' ? orthogonalGrid : randomGrid
-  return fn({ map: map.config, obstacles })
+  return fn({ map: map.config, obstacles, nums: config.value.grid.nums })
 })
 
 const db = computed(() => {
@@ -327,8 +329,12 @@ useEventListener('keyup', (e) => {
 })
 
 useEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() === 'f')
-    topkPoints.value = find()
+  if (e.key.toLowerCase() === 'f') {
+    topkPoints.value = find().map(p => ({
+      x: Math.round(p.x),
+      y: Math.round(p.y),
+    }))
+  }
 })
 
 function input() {
@@ -374,7 +380,10 @@ onMounted(animate)
               <span class="font-extrabold text-success">W/A/S/D</span> to move
             </p>
             <p>
-              <span class="font-extrabold text-success">F</span> to find grid position.
+              <span class="font-extrabold text-success">Hover</span> on grid node to show its rays
+            </p>
+            <p>
+              <span class="font-extrabold text-success">F</span> to find grid node
             </p>
           </div>
         </UCard>
@@ -409,7 +418,7 @@ onMounted(animate)
             <p class="font-extrabold">
               Display
             </p>
-            <div class="flex gap-6">
+            <div class="flex gap-10">
               <USwitch
                 v-model="config.grid.show"
                 label="Grid points"
@@ -435,8 +444,25 @@ onMounted(animate)
                 { label: 'Orthogonal', value: 'orthogonal' },
                 { label: 'Restricted random', value: 'random' },
               ]"
-              :ui="{ fieldset: 'gap-x-6' }"
-            />
+              :ui="{ fieldset: 'gap-x-10', item: 'items-center' }"
+            >
+              <template
+                #label="{ item, modelValue }"
+              >
+                <div
+                  v-if="(item as any).value === 'random' && modelValue === 'random'"
+                  class="flex items-center gap-2"
+                >
+                  <span>{{ (item as any).label }}</span>
+                  <UInputNumber
+                    v-model="config.grid.nums"
+                    size="sm"
+                    orientation="vertical"
+                    class="w-20"
+                  />
+                </div>
+              </template>
+            </URadioGroup>
           </div>
         </UCard>
 
@@ -482,12 +508,12 @@ onMounted(animate)
                 { label: 'Manhattan', value: 'manhattan' },
                 { label: 'Cosine', value: 'cosine' },
               ]"
-              :ui="{ fieldset: 'gap-x-6' }"
+              :ui="{ fieldset: 'gap-x-10' }"
             />
           </div>
         </UCard>
 
-        <UCard>
+        <!-- <UCard>
           <div class="grid gap-3">
             <p class="mb-2 font-extrabold">
               Robot
@@ -504,7 +530,7 @@ onMounted(animate)
               />
             </label>
           </div>
-        </UCard>
+        </UCard> -->
       </div>
     </div>
   </div>
