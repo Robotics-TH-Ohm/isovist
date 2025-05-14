@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { FeatureKey, Point } from '~/isovist/types'
+import type { FeatureKey, FeaturesDb, Point } from '~/isovist/types'
 import { cosine, euclidean, manhattan } from '~/isovist/diff'
-import { computeFeatures, features } from '~/isovist/features'
+import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
-import { cast, EPS } from '~/isovist/utils'
+import { cast } from '~/isovist/utils'
 
 interface GlobalConfig {
   features: FeatureKey[]
@@ -56,7 +56,7 @@ const grid = computed(() => {
   return fn({ map: map.config, obstacles, nums: config.value.grid.nums })
 })
 
-const db = computed(() => {
+const db = computed<FeaturesDb>(() => {
   const entries = grid.value.map((viewpoint) => {
     const points = cast(viewpoint, lines)
     const features = computeFeatures(viewpoint, points, config.value.features)
@@ -65,8 +65,12 @@ const db = computed(() => {
 
   const keys = Array.from(config.value.features)
 
-  const lim = {} as Record<FeatureKey, { min: number, max: number }>
+  const lim = {} as FeaturesDb['lim']
   for (const k of keys) {
+    if (k === 'radialLengthSequence') {
+      continue
+    }
+
     for (const entry of entries) {
       const features = entry.features
       if (!lim[k]) {
@@ -90,15 +94,18 @@ const db = computed(() => {
   }
 
   for (const k of keys) {
+    if (k === 'radialLengthSequence') {
+      continue
+    }
+
     const { min, max } = lim[k]
-    const denom = max - min
 
     for (const entry of entries) {
       const features = entry.features
       if (!features[k])
         continue
 
-      features[k] = Math.abs(denom) < EPS ? 0 : (features[k] - min) / denom
+      features[k] = normalize(features[k], min, max)
     }
   }
 
@@ -107,9 +114,10 @@ const db = computed(() => {
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
 const topkPoints = shallowRef<Point[]>()
-const hover = shallowRef<Point>()
+const hoverPoint = shallowRef<Point>()
+const finding = shallowRef(false)
 
-function find(k = 5, step = 5) {
+function find(k = 1, step = 10) {
   const viewpoints = []
 
   if (step) {
@@ -126,8 +134,6 @@ function find(k = 5, step = 5) {
     viewpoints.push({ x: robot.state.value.x, y: robot.state.value.y })
   }
 
-  const keys = Array.from(config.value.features)
-
   const distanceFn = (() => {
     switch (config.value.distance) {
       case 'euclidean': return euclidean
@@ -136,7 +142,9 @@ function find(k = 5, step = 5) {
     }
   })()
 
-  const topkSet = new Set<{ viewpoint: Point, d: number }>()
+  const keys = Array.from(config.value.features)
+
+  const allMatches: { viewpoint: Point, d: number }[] = []
   for (const viewpoint of viewpoints) {
     const points = cast(viewpoint, lines)
     const features = computeFeatures(viewpoint, points, config.value.features)
@@ -144,9 +152,15 @@ function find(k = 5, step = 5) {
       continue
 
     for (const k of keys) {
+      if (!features[k])
+        continue
+
+      if (k === 'radialLengthSequence') {
+        continue
+      }
+
       const { min, max } = db.value.lim[k]
-      const denom = max - min
-      features[k] = Math.abs(denom) < EPS ? 0 : (features[k]! - min) / denom
+      features[k] = normalize(features[k], min, max)
     }
 
     const matches: { viewpoint: Point, d: number }[] = []
@@ -158,12 +172,30 @@ function find(k = 5, step = 5) {
       matches.push({ viewpoint: entry.viewpoint, d })
     }
     matches.sort((a, b) => a.d - b.d)
-    for (const m of matches.slice(0, k)) {
-      topkSet.add(m)
+
+    const topk: { viewpoint: Point, d: number }[] = []
+    let i = 0
+    while (topk.length < k && i < matches.length) {
+      const m = matches[i]
+      if (
+        topk.find(i => i.viewpoint.x === m.viewpoint.x
+          && i.viewpoint.y === m.viewpoint.y
+          && i.d === m.d)
+      ) {
+        continue
+      }
+
+      topk.push(m)
+      i++
     }
+    allMatches.push(...topk)
   }
-  const topk = Array.from(topkSet).sort((a, b) => a.d - b.d).slice(0, k)
-  return topk.map(x => x.viewpoint)
+
+  const topMatches = Array.from(allMatches)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, k)
+
+  return topMatches.map(x => x.viewpoint)
 }
 
 const canvasEl = useTemplateRef('canvas')
@@ -275,14 +307,14 @@ function draw() {
   }
 
   // Draw hover node
-  if (hover.value) {
-    const points = cast({ x: hover.value.x, y: hover.value.y }, lines)
+  if (hoverPoint.value) {
+    const points = cast({ x: hoverPoint.value.x, y: hoverPoint.value.y }, lines)
     ctx.lineWidth = 1
     ctx.strokeStyle = successClr
     ctx.globalAlpha = 0.5
     points.forEach((p) => {
       ctx.beginPath()
-      ctx.moveTo(hover.value!.x, hover.value!.y)
+      ctx.moveTo(hoverPoint.value!.x, hoverPoint.value!.y)
       ctx.lineTo(p.x, p.y)
       ctx.stroke()
     })
@@ -290,7 +322,7 @@ function draw() {
 
     ctx.fillStyle = infoClr
     ctx.beginPath()
-    ctx.arc(hover.value.x, hover.value.y, 6, 0, 2 * Math.PI)
+    ctx.arc(hoverPoint.value.x, hoverPoint.value.y, 6, 0, 2 * Math.PI)
     ctx.fill()
   }
 }
@@ -311,16 +343,18 @@ useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
   if (!entry)
     return
 
-  hover.value = entry.viewpoint
+  hoverPoint.value = entry.viewpoint
 }))
 
 useEventListener(canvasEl, 'mouseout', () => {
-  hover.value = undefined
+  hoverPoint.value = undefined
 })
 
 const keys = new Set<string>()
 
 useEventListener('keydown', (e) => {
+  if (finding.value)
+    return
   keys.add(e.key.toLowerCase())
 })
 
@@ -329,11 +363,21 @@ useEventListener('keyup', (e) => {
 })
 
 useEventListener('keydown', (e) => {
+  if (finding.value)
+    return
+
   if (e.key.toLowerCase() === 'f') {
-    topkPoints.value = find().map(p => ({
-      x: Math.round(p.x),
-      y: Math.round(p.y),
-    }))
+    if (config.value.features.includes('radialLengthSequence')) {
+      finding.value = true
+    }
+
+    setTimeout(() => {
+      topkPoints.value = find().map(p => ({
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+      }))
+      finding.value = false
+    }, 0)
   }
 })
 
@@ -364,24 +408,23 @@ onMounted(animate)
   <div class="p-6 mx-auto font-mono @container">
     <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
       <div class="relative flex flex-col gap-3 items-center justify-center">
-        <div class="absolute top-0 right-0 flex gap-2">
-          <UButton
-            icon="i-lucide-github"
-            variant="soft"
-            to="https://github.com/chubetho/isovist"
-            target="_blank"
+        <Header />
+
+        <div class="relative my-6">
+          <canvas
+            ref="canvas"
+            :width="map.config.width"
+            :height="map.config.height"
+            :class="{ blur: finding }"
           />
-          <ColorMode />
+
+          <div
+            v-if="finding"
+            class="absolute inset-0 size-full flex items-center justify-center"
+          >
+            <UIcon name="i-lucide:rotate-cw" class="size-20 animate-spin text-warning" />
+          </div>
         </div>
-        <h1 class="text-success font-bold text-xl mt-3 tracking-widest">
-          Kidnapped Robot and Isovist
-        </h1>
-        <canvas
-          ref="canvas"
-          :width="map.config.width"
-          :height="map.config.height"
-          class="my-6"
-        />
         <UCard>
           <div class="grid gap-1">
             <p>
@@ -430,6 +473,7 @@ onMounted(animate)
               <div class="flex gap-2">
                 <UButton
                   size="xs"
+                  color="success"
                   @click="checkAllFeatureKeys"
                 >
                   Check all

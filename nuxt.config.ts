@@ -8,6 +8,11 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
+  ui: {
+    theme: {
+      colors: ['primary', 'success', 'info', 'error', 'warning'],
+    },
+  },
   future: {
     compatibilityVersion: 4,
   },

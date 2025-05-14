@@ -1,5 +1,3 @@
-import type { FEATURE_KEYS } from './features'
-
 export interface Point {
   x: number
   y: number
@@ -42,7 +40,32 @@ export interface MapConfig {
   lineWidth: number
 }
 
-export type FeatureKey = typeof FEATURE_KEYS[number]
-export type Features = {
-  [K in FeatureKey]: number
+export interface Features {
+  area: number
+  perimeter: number
+  compactness: number
+  occlusivity: number
+  drift: number
+  radialLengthMin: number
+  radialLengthMean: number
+  radialLengthMax: number
+  radialLengthSequence: number[]
+  radialMomentMean: number
+  radialMomentVariance: number
+  radialMomentSkewness: number
+}
+
+export type FeatureKey = keyof Features
+
+export interface FeaturesDb {
+  lim: Record<keyof Features, { min: number, max: number }>
+  entries: {
+    viewpoint: Point
+    features: Partial<Features>
+  }[]
+}
+
+export interface FeatureDbEntry {
+  viewpoint: Point
+  features: Partial<Features>
 }

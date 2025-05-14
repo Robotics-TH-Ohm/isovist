@@ -1,10 +1,19 @@
 import type { FeatureKey, Features } from './types'
+import { dtw } from './features'
 
 export function euclidean(f1: Partial<Features>, f2: Partial<Features>) {
   let sum = 0
   const keys = Object.keys(f1) as FeatureKey[]
 
   for (const key of keys) {
+    if (key === 'radialLengthSequence') {
+      if (f1[key] && f2[key]) {
+        const diff = dtw(f1[key], f2[key])
+        sum += diff * diff
+      }
+      continue
+    }
+
     const v1 = f1[key]
     const v2 = f2[key]
 
@@ -28,6 +37,14 @@ export function manhattan(f1: Partial<Features>, f2: Partial<Features>) {
   const keys = Object.keys(f1) as FeatureKey[]
 
   for (const key of keys) {
+    if (key === 'radialLengthSequence') {
+      if (f1[key] && f2[key]) {
+        const diff = dtw(f1[key], f2[key])
+        sum += Math.abs(diff)
+      }
+      continue
+    }
+
     const v1 = f1[key]
     const v2 = f2[key]
 
@@ -52,6 +69,17 @@ export function cosine(f1: Partial<Features>, f2: Partial<Features>) {
 
   const keys = Object.keys(f1) as FeatureKey[]
   for (const key of keys) {
+    if (key === 'radialLengthSequence') {
+      if (f1[key] && f2[key]) {
+        const diff = dtw(f1[key], f2[key])
+        const v = diff * diff
+        product += v
+        magnitude1 += v
+        magnitude2 += v
+      }
+      continue
+    }
+
     const v1 = f1[key]
     const v2 = f2[key]
 

@@ -2,7 +2,7 @@ import type { CheckboxGroupItem } from '@nuxt/ui'
 import type { FeatureKey, Features, Point } from './types'
 import { centroid, clamp, distPointToPoint, EPS } from './utils'
 
-export const FEATURE_KEYS = [
+export const FEATURE_KEYS: FeatureKey[] = [
   'area',
   'perimeter',
   'compactness',
@@ -11,17 +11,18 @@ export const FEATURE_KEYS = [
   'radialLengthMin',
   'radialLengthMean',
   'radialLengthMax',
+  'radialLengthSequence',
   'radialMomentMean',
   'radialMomentVariance',
   'radialMomentSkewness',
-] as const
+]
 
 const cache = {
   moments: new Map<string, { m1: number, m2: number, m3: number }>(),
 }
 
 export const features: {
-  fns: Record<FeatureKey, (viewpoint: Point, points: Point[]) => number>
+  fns: { [K in FeatureKey]: (viewpoint: Point, points: Point[]) => Features[K] }
   checkboxes: (CheckboxGroupItem & { value: FeatureKey })[]
 } = {
   fns: {
@@ -102,6 +103,9 @@ export const features: {
       const lengths = points.map(p => distPointToPoint(viewpoint, p))
       return Math.max(...lengths)
     },
+    radialLengthSequence(viewpoint, points) {
+      return points.map(p => distPointToPoint(viewpoint, p))
+    },
     radialMomentMean(viewpoint, points) {
       const cacheKey = computeCacheKey(viewpoint)
       const _moments = cache.moments.get(cacheKey)
@@ -170,7 +174,7 @@ export const features: {
     },
     {
       label: 'Drift',
-      description: 'Distance from viewpoint to the balance point of the visible area. Lower is more central.',
+      description: 'Distance from viewpoint to the balance point of the visible area.',
       value: 'drift',
     },
     {
@@ -187,6 +191,11 @@ export const features: {
       label: 'Radial Length Max',
       description: 'Maximum distance from the viewpoint to an isovist vertex.',
       value: 'radialLengthMax',
+    },
+    {
+      label: 'Radial Length Sequence (Slow)',
+      description: 'Sequence of distances from the viewpoint to an isovist vertex.',
+      value: 'radialLengthSequence',
     },
     {
       label: 'Radial Moment Mean',
@@ -209,7 +218,7 @@ export const features: {
 export function computeFeatures(viewpoint: Point, points: Point[], keys: FeatureKey[]) {
   const result: Partial<Features> = {}
   for (const k of keys) {
-    result[k] = features.fns[k](viewpoint, points)
+    result[k] = features.fns[k](viewpoint, points) as any
   }
   return result
 }
@@ -338,4 +347,32 @@ function cosec(angle: number) {
 
 function computeCacheKey(viewpoint: Point) {
   return `${viewpoint.x.toFixed(6)},${viewpoint.y.toFixed(6)}`
+}
+
+export function normalize(value: number, min: number, max: number) {
+  const denom = max - min
+  return Math.abs(denom) < EPS ? 0 : (value - min) / denom
+}
+
+export function dtw(a: number[], b: number[]) {
+  const length = a.length
+
+  const matrix: number[][] = []
+  for (let i = 0; i <= length; i++) {
+    matrix[i] = Array.from({ length: length + 1 }).fill(Number.POSITIVE_INFINITY) as number[]
+  }
+  matrix[0][0] = 0
+
+  for (let i = 1; i <= length; i++) {
+    for (let j = 1; j <= length; j++) {
+      const cost = Math.abs(a[i - 1] - b[j - 1])
+      matrix[i][j] = cost + Math.min(
+        matrix[i - 1][j],
+        matrix[i][j - 1],
+        matrix[i - 1][j - 1],
+      )
+    }
+  }
+
+  return matrix[length][length]
 }
