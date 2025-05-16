@@ -277,7 +277,7 @@ function draw() {
   // Draw rays
   if (config.value.robot.rays) {
     const points = cast({ x: robot.state.value.x, y: robot.state.value.y }, lines)
-    ctx.lineWidth = 1
+    ctx.lineWidth = 2
     ctx.strokeStyle = successClr
     ctx.globalAlpha = 0.5
     points.forEach((p) => {
@@ -377,7 +377,7 @@ useEventListener('keydown', (e) => {
         y: Math.round(p.y),
       }))
       finding.value = false
-    }, 0)
+    }, 100)
   }
 })
 

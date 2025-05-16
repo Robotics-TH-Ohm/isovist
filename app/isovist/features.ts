@@ -6,7 +6,6 @@ export const FEATURE_KEYS: FeatureKey[] = [
   'area',
   'perimeter',
   'compactness',
-  'occlusivity',
   'drift',
   'radialLengthMin',
   'radialLengthMean',
@@ -19,6 +18,7 @@ export const FEATURE_KEYS: FeatureKey[] = [
 
 const cache = {
   moments: new Map<string, { m1: number, m2: number, m3: number }>(),
+  lengths: new Map<string, number[]>(),
 }
 
 export const features: {
@@ -68,9 +68,6 @@ export const features: {
       const compactness = (4 * Math.PI * area) / (perimeter ** 2)
       return compactness
     },
-    occlusivity() {
-      return 0
-    },
     drift(viewpoint, points) {
       const area = features.fns.area(viewpoint, points)
       const _centroid = centroid(points, area)
@@ -84,7 +81,12 @@ export const features: {
       if (n === 0)
         return 0
 
-      const lengths = points.map(p => distPointToPoint(viewpoint, p))
+      const cacheKey = computeCacheKey(viewpoint)
+      const _lengths = cache.lengths.get(cacheKey)
+      const lengths = _lengths ?? points.map(p => distPointToPoint(viewpoint, p))
+      if (!_lengths)
+        cache.lengths.set(cacheKey, lengths)
+
       return Math.min(...lengths)
     },
     radialLengthMean(viewpoint, points) {
@@ -92,7 +94,13 @@ export const features: {
       if (n === 0)
         return 0
 
-      const sum = points.reduce((acc, p) => acc + distPointToPoint(viewpoint, p), 0)
+      const cacheKey = computeCacheKey(viewpoint)
+      const _lengths = cache.lengths.get(cacheKey)
+      const lengths = _lengths ?? points.map(p => distPointToPoint(viewpoint, p))
+      if (!_lengths)
+        cache.lengths.set(cacheKey, lengths)
+
+      const sum = lengths.reduce((acc, l) => acc + l, 0)
       return sum / n
     },
     radialLengthMax(viewpoint, points) {
@@ -100,11 +108,22 @@ export const features: {
       if (n === 0)
         return 0
 
-      const lengths = points.map(p => distPointToPoint(viewpoint, p))
+      const cacheKey = computeCacheKey(viewpoint)
+      const _lengths = cache.lengths.get(cacheKey)
+      const lengths = _lengths ?? points.map(p => distPointToPoint(viewpoint, p))
+      if (!_lengths)
+        cache.lengths.set(cacheKey, lengths)
+
       return Math.max(...lengths)
     },
     radialLengthSequence(viewpoint, points) {
-      return points.map(p => distPointToPoint(viewpoint, p))
+      const cacheKey = computeCacheKey(viewpoint)
+      const _lengths = cache.lengths.get(cacheKey)
+      const lengths = _lengths ?? points.map(p => distPointToPoint(viewpoint, p))
+      if (!_lengths)
+        cache.lengths.set(cacheKey, lengths)
+
+      return lengths
     },
     radialMomentMean(viewpoint, points) {
       const cacheKey = computeCacheKey(viewpoint)
@@ -165,12 +184,6 @@ export const features: {
       label: 'Compactness',
       description: 'A measure of how "circular" the visible area is.',
       value: 'compactness',
-    },
-    {
-      label: 'Occlusivity',
-      description: 'The length of the isovist boundary formed by interior obstacles.',
-      value: 'occlusivity',
-      disabled: true,
     },
     {
       label: 'Drift',

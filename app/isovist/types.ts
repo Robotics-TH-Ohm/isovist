@@ -44,7 +44,6 @@ export interface Features {
   area: number
   perimeter: number
   compactness: number
-  occlusivity: number
   drift: number
   radialLengthMin: number
   radialLengthMean: number
