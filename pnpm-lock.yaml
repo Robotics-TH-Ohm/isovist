@@ -20,6 +20,9 @@ importers:
       nuxt:
         specifier: ^3.17.3
         version: 3.17.3(@netlify/blobs@8.2.0)(@parcel/watcher@2.5.1)(@types/node@22.15.3)(db0@0.3.2)(eslint@9.26.0(jiti@2.4.2))(ioredis@5.6.1)(lightningcss@1.29.2)(magicast@0.3.5)(optionator@0.9.4)(rollup@4.40.1)(terser@5.39.0)(typescript@5.8.3)(vite@6.3.5(@types/node@22.15.3)(jiti@2.4.2)(lightningcss@1.29.2)(terser@5.39.0)(yaml@2.7.1))(yaml@2.7.1)
+      svgcanvas:
+        specifier: ^2.6.0
+        version: 2.6.0
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -5124,6 +5127,9 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+
+  svgcanvas@2.6.0:
+    resolution: {integrity: sha512-H/2iVTLyuLxbLNYArnTaR8RmCR7fi8Gx7Hul7+lnPcN/b6AXLS56iVzUudgfMmkKrF9+GvXm+YJlT9Tg4eIj3A==}
 
   svgo@3.3.2:
     resolution: {integrity: sha512-OoohrmuUlBs8B8o6MB2Aevn+pRIH9zDALSR+6hhqVfa6fRwG/Qw9VUMSMW9VNg2CFc/MTIfabtdOVl9ODIJjpw==}
@@ -11681,6 +11687,8 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  svgcanvas@2.6.0: {}
 
   svgo@3.3.2:
     dependencies:

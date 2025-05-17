@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { FeatureKey, FeaturesDb, Point } from '~/isovist/types'
+// @ts-expect-error no type
+import { Context } from 'svgcanvas'
 import { cosine, euclidean, manhattan } from '~/isovist/diff'
 import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
@@ -202,14 +204,24 @@ const canvasEl = useTemplateRef('canvas')
 
 function draw() {
   const canvas = canvasEl.value
-  const ctx = canvas?.getContext('2d')
-  if (!ctx || !canvas)
+  // const ctx = canvas?.getContext('2d')
+  // if (!ctx || !canvas)
+  //   return
+
+  const _ctx = canvas?.getContext('2d')
+  if (!_ctx || !canvas)
     return
+  const ctx = new Context({
+    height: 600, // falsy values get converted to 500
+    width: 600, // falsy values get converted to 500
+    ctx: _ctx, // existing Context2D to wrap around
+    enableMirroring: false, // whether canvas mirroring (get image data) is enabled (defaults to false)
+  })
 
   const style = getComputedStyle(document.documentElement)
   const bgClr = style.getPropertyValue('--background-color-default')
   const warningClr = style.getPropertyValue('--ui-warning')
-  const errorClr = style.getPropertyValue('--ui-error')
+  // const errorClr = style.getPropertyValue('--ui-error')
   const successClr = style.getPropertyValue('--ui-success')
   const infoClr = style.getPropertyValue('--ui-info')
   const textClr = style.getPropertyValue('--ui-text')
@@ -290,10 +302,10 @@ function draw() {
   }
 
   // Draw robot
-  ctx.fillStyle = errorClr
-  ctx.beginPath()
-  ctx.arc(robot.state.value.x, robot.state.value.y, 10, 0, 2 * Math.PI)
-  ctx.fill()
+  // ctx.fillStyle = errorClr
+  // ctx.beginPath()
+  // ctx.arc(robot.state.value.x, robot.state.value.y, 10, 0, 2 * Math.PI)
+  // ctx.fill()
 
   // Draw topk
   if (topkPoints.value) {
@@ -325,6 +337,8 @@ function draw() {
     ctx.arc(hoverPoint.value.x, hoverPoint.value.y, 6, 0, 2 * Math.PI)
     ctx.fill()
   }
+
+  console.log(ctx.getSvg())
 }
 
 useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
@@ -399,7 +413,7 @@ function input() {
 function animate() {
   draw()
   input()
-  requestAnimationFrame(animate)
+  // requestAnimationFrame(animate)
 }
 onMounted(animate)
 </script>
