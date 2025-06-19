@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeaturesDb, GlobalConfig, Point, TopK } from '~/isovist/types'
-import { cosine, euclidean, manhattan } from '~/isovist/diff'
+import { cosine, euclidean, manhattan } from '~/isovist/distances'
 import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'

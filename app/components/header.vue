@@ -4,7 +4,8 @@ if (colorMode.preference === 'system') {
   colorMode.preference = 'dark'
 }
 
-const url = useQrCode('https://robotics-th-ohm.github.io/Isovist/')
+const url = 'https://robotics-th-ohm.github.io/isovist/'
+const qrCode = useQrCode(url)
 </script>
 
 <template>
@@ -33,13 +34,13 @@ const url = useQrCode('https://robotics-th-ohm.github.io/Isovist/')
       <UButton
         icon="i-lucide-newspaper"
         variant="soft"
-        to="https://robotics-th-ohm.github.io/Isovist-Report/"
+        to="https://robotics-th-ohm.github.io/isovist-report/"
         target="_blank"
         size="sm"
       />
     </UTooltip>
 
-    <UModal title="QR Code" :ui="{ body: 'p-0 sm:p-0 aspect-square' }">
+    <UModal :title="url" :ui="{ body: 'p-0 sm:p-0 aspect-square' }">
       <UTooltip text="QR Code ">
         <UButton
           icon="i-lucide-qr-code"
@@ -51,7 +52,7 @@ const url = useQrCode('https://robotics-th-ohm.github.io/Isovist/')
 
       <template #body>
         <div class="flex items-center justify-center aspect-square size-full p-6">
-          <img :src="url" alt="QR Code" class="aspect-square size-full object-contain">
+          <img :src="qrCode" alt="QR Code" class="aspect-square size-full object-contain">
         </div>
       </template>
     </UModal>
