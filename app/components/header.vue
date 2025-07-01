@@ -1,25 +1,55 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
+
 const colorMode = useColorMode()
 if (colorMode.preference === 'system') {
   colorMode.preference = 'dark'
 }
 
-const url = 'https://robotics-th-ohm.github.io/isovist/'
-const qrCode = useQrCode(url)
+const PAPER_URL = 'https://robotics-th-ohm.github.io/isovist-report/'
+const WEB_URL = 'https://robotics-th-ohm.github.io/isovist/'
+const WEB_REPO_URL = 'https://github.com/Robotics-TH-Ohm/isovist'
+const CARBOT_REPO_URL = 'https://github.com/Robotics-TH-Ohm/carbot-isovist'
+
+const qrModal = ref({
+  src: useQrCode(WEB_URL),
+  open: false,
+})
+
+const items = ref<DropdownMenuItem[]>([
+  {
+    label: 'Paper',
+    icon: 'i-lucide-file-text',
+    type: 'link',
+    target: '_blank',
+    to: PAPER_URL,
+  },
+  {
+    label: 'Web Simmulator',
+    icon: 'i-lucide-github',
+    type: 'link',
+    target: '_blank',
+    to: WEB_REPO_URL,
+  },
+  {
+    label: 'Carbot Simmulator',
+    icon: 'i-lucide-github',
+    type: 'link',
+    target: '_blank',
+    to: CARBOT_REPO_URL,
+  },
+  {
+    label: 'Show QR-Code',
+    icon: 'i-lucide-qr-code',
+    onSelect() {
+      qrModal.value.open = true
+    },
+  },
+])
 </script>
 
 <template>
-  <div class="absolute top-0 right-0 grid grid-cols-2 gap-1">
-    <UTooltip text="Github Repository">
-      <UButton
-        icon="i-lucide-github"
-        variant="soft"
-        to="https://github.com/Robotics-TH-Ohm/Isovist"
-        target="_blank"
-        size="sm"
-      />
-    </UTooltip>
-
+  <div class="absolute top-0 right-0 flex gap-1">
     <UTooltip :text="colorMode.preference === 'dark' ? 'Dark Mode' : 'Light Mode'">
       <UButton
         :icon="colorMode.preference === 'dark' ? 'i-lucide-moon' : 'i-lucide-sun'"
@@ -30,29 +60,30 @@ const qrCode = useQrCode(url)
       />
     </UTooltip>
 
-    <UTooltip text="Papier">
+    <UDropdownMenu
+      :items="items"
+      :content="{ align: 'end' }"
+      :ui="{ content: 'w-48' }"
+      size="sm"
+    >
       <UButton
-        icon="i-lucide-newspaper"
+        icon="i-lucide-menu"
         variant="soft"
-        to="https://robotics-th-ohm.github.io/isovist-report/"
-        target="_blank"
         size="sm"
+        label="More"
+        trailing
       />
-    </UTooltip>
+    </UDropdownMenu>
 
-    <UModal :title="url" :ui="{ body: 'p-0 sm:p-0 aspect-square' }">
-      <UTooltip text="QR Code ">
-        <UButton
-          icon="i-lucide-qr-code"
-          variant="soft"
-          target="_blank"
-          size="sm"
-        />
-      </UTooltip>
-
+    <UModal
+      v-model:open="qrModal.open"
+      :title="WEB_URL"
+      description="QR-Code"
+      :ui="{ body: 'p-0 sm:p-0 aspect-square', description: 'sr-only' }"
+    >
       <template #body>
         <div class="flex items-center justify-center aspect-square size-full p-6">
-          <img :src="qrCode" alt="QR Code" class="aspect-square size-full object-contain">
+          <img :src="qrModal.src" alt="QR-Code" class="aspect-square size-full object-contain">
         </div>
       </template>
     </UModal>

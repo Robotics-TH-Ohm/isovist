@@ -10,7 +10,7 @@ useHead({
     { name: 'description', content: description },
   ],
   link: [
-    { rel: 'icon', href: '/bot.svg' },
+    { rel: 'icon', href: `${import.meta.baseURL ?? ''}/bot.svg` },
   ],
   htmlAttrs: {
     lang: 'en',
