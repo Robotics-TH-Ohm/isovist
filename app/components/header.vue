@@ -10,6 +10,7 @@ const PAPER_URL = 'https://robotics-th-ohm.github.io/isovist-report/'
 const WEB_URL = 'https://robotics-th-ohm.github.io/isovist/'
 const WEB_REPO_URL = 'https://github.com/Robotics-TH-Ohm/isovist'
 const CARBOT_REPO_URL = 'https://github.com/Robotics-TH-Ohm/carbot-isovist'
+const PRESENTATION_URL = 'https://pitch.com/v/krp-isovist-ndkrs6'
 
 const qrModal = ref({
   src: useQrCode(WEB_URL),
@@ -23,6 +24,13 @@ const items = ref<DropdownMenuItem[]>([
     type: 'link',
     target: '_blank',
     to: PAPER_URL,
+  },
+  {
+    label: 'Presentation',
+    icon: 'i-lucide-presentation',
+    type: 'link',
+    target: '_blank',
+    to: PRESENTATION_URL,
   },
   {
     label: 'Web Simmulator',
