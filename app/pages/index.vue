@@ -396,7 +396,7 @@ useEventListener('keydown', (e) => {
     }
 
     setTimeout(() => {
-      const timeStart = new Date().getTime()
+      const timeStart = Date.now()
       const topk = predict(robot.viewpoint.value).map(k => ({
         d: +k.d.toFixed(2),
         point: {
@@ -404,7 +404,7 @@ useEventListener('keydown', (e) => {
           y: Math.round(k.point.y),
         },
       }))
-      const timeEnd = new Date().getTime()
+      const timeEnd = Date.now()
       prediction.value = {
         topk,
         time: ((timeEnd - timeStart) / 1000).toFixed(2),
